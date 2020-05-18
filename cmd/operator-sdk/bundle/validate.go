@@ -17,21 +17,32 @@ package bundle
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/operator-framework/operator-sdk/internal/flags"
 
 	"github.com/operator-framework/operator-registry/pkg/lib/bundle"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	bundleinternal "github.com/operator-framework/operator-sdk/cmd/operator-sdk/bundle/internal"
+	"github.com/operator-framework/operator-sdk/cmd/operator-sdk/internal"
+	"github.com/operator-framework/operator-sdk/internal/flags"
+)
+
+const (
+	//output types
+	jsonAlpha1 = "json-alpha1"
+	text       = "text"
 )
 
 type bundleValidateCmd struct {
 	bundleCmd
+
+	outputFormat string
 }
 
 // newValidateCmd returns a command that will validate an operator bundle image.
@@ -72,20 +83,34 @@ To build and validate an image:
 
 `,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err = c.validate(args); err != nil {
-				return fmt.Errorf("error validating args: %v", err)
+			if viper.GetBool(flags.VerboseOpt) {
+				log.SetLevel(log.DebugLevel)
 			}
+			// Always print non-output logs to stderr as to not pollute actual command output.
+			logger := log.NewEntry(internal.NewLoggerTo(os.Stderr))
+
+			if err = c.validate(args); err != nil {
+				return fmt.Errorf("invalid command args: %v", err)
+			}
+
 			// If the argument isn't a directory, assume it's an image.
 			if isExist(args[0]) {
 				if c.directory, err = relWd(args[0]); err != nil {
-					log.Fatal(err)
+					logger.Fatal(err)
 				}
 			} else {
 				c.imageTag = args[0]
 			}
-			if err = c.run(); err != nil {
-				log.Fatal(err)
+
+			// Run the command and print any validation output to stdout.
+			output, err := c.run(logger)
+			if err != nil {
+				logger.Fatal(err)
 			}
+			if err := writeOutput(output, os.Stdout, c.outputFormat); err != nil {
+				logger.Fatal(err)
+			}
+
 			return nil
 		},
 	}
@@ -99,31 +124,42 @@ func (c bundleValidateCmd) validate(args []string) error {
 	if len(args) != 1 {
 		return errors.New("an image tag or directory is a required argument")
 	}
+	if c.outputFormat != jsonAlpha1 && c.outputFormat != text {
+		return fmt.Errorf("invalid value for output flag: %v", c.outputFormat)
+	}
 	return nil
 }
 
 func (c *bundleValidateCmd) addToFlagSet(fs *pflag.FlagSet) {
 	fs.StringVarP(&c.imageBuilder, "image-builder", "b", "docker",
 		"Tool to extract container images. One of: [docker, podman]")
+	fs.StringVarP(&c.outputFormat, "output", "o", text,
+		"Output format for results. One of: [text, json-alpha1]")
+
+	// It is hidden because it is an alpha option
+	// The idea is the next versions of Operator Registry will return a List of errors
+	if err := fs.MarkHidden("output"); err != nil {
+		panic(err)
+	}
 }
 
-func (c bundleValidateCmd) run() (err error) {
+func (c bundleValidateCmd) run(logger *log.Entry) (output bundleinternal.Output, err error) {
 	// Set directory, either supplied directly or a temp dir used to unpack
 	// the image.
 	dir := c.directory
 	if c.imageTag != "" {
 		dir, err = ioutil.TempDir("", "bundle-")
 		if err != nil {
-			return err
+			return output, err
 		}
 		defer func() {
 			if err = os.RemoveAll(dir); err != nil {
-				log.Errorf("Error removing temp bundle dir: %v", err)
+				logger.Errorf("Error removing temp bundle dir: %v", err)
 			}
 		}()
 	}
 	if dir, err = filepath.Abs(dir); err != nil {
-		return err
+		return output, err
 	}
 
 	// Set up logger.
@@ -131,10 +167,7 @@ func (c bundleValidateCmd) run() (err error) {
 	if c.imageTag != "" {
 		fields["container-tool"] = c.imageBuilder
 	}
-	logger := log.WithFields(fields)
-	if viper.GetBool(flags.VerboseOpt) {
-		log.SetLevel(log.DebugLevel)
-	}
+	logger = logger.WithFields(fields)
 
 	val := bundle.NewImageValidator(c.imageBuilder, logger)
 
@@ -143,22 +176,54 @@ func (c bundleValidateCmd) run() (err error) {
 		logger.Info("Unpacked image layers")
 		err = val.PullBundleImage(c.imageTag, dir)
 		if err != nil {
-			logger.Fatalf("Error to unpacking image: %v", err)
+			return output, fmt.Errorf("error unpacking image: %w", err)
 		}
 	}
 
+	var valErrs []error
 	// Validate bundle format.
 	if err = val.ValidateBundleFormat(dir); err != nil {
-		logger.Fatalf("Bundle format validation failed: %v", err)
+		valErrs = append(valErrs, err)
 	}
 
 	// Validate bundle content.
 	manifestsDir := filepath.Join(dir, bundle.ManifestsDir)
 	if err = val.ValidateBundleContent(manifestsDir); err != nil {
-		logger.Fatalf("Bundle content validation failed: %v", err)
+		valErrs = append(valErrs, err)
 	}
 
-	logger.Info("All validation tests have completed successfully")
+	if len(valErrs) == 0 {
+		logger.Info("All validation tests have completed successfully")
+	}
 
-	return nil
+	// Create a new output containing validation errors, if any, and return.
+	return bundleinternal.NewOutput(valErrs...), nil
+}
+
+// writeOutput writes output to w in format, and exits if some object in output
+// is not in a passing state.
+func writeOutput(output bundleinternal.Output, w io.Writer, format string) (err error) {
+	wf := writeFuncForFormat(w, format)
+	if err = wf(output); err == nil && !output.Passed {
+		os.Exit(1)
+	}
+	return err
+}
+
+// writeFuncForFormat returns a function that writes an Output to w in a given
+// format, defaulting to "text" if format is not recognized.
+func writeFuncForFormat(w io.Writer, format string) func(bundleinternal.Output) error {
+
+	// Write output in desired format.
+	switch format {
+	case jsonAlpha1:
+		return func(o bundleinternal.Output) error {
+			return o.WriteJSON(w)
+		}
+	}
+
+	logger := log.NewEntry(internal.NewLoggerTo(w))
+	return func(o bundleinternal.Output) error {
+		return o.LogText(logger)
+	}
 }
