@@ -94,7 +94,7 @@ stages:
   - check
   - test
   - name: deploy
-    if: type != pull_request AND ( tag IS present OR branch = master OR commit_message =~ /\[travis deploy\]/ )
+    # if: type != pull_request AND ( tag IS present OR branch = master OR commit_message =~ /\[travis deploy\]/ )
   - name: deploy-manifest-multiarch
     if: type != pull_request AND ( tag IS present OR branch = master OR commit_message =~ /\[travis deploy\]/ )
 
@@ -152,7 +152,7 @@ jobs:
       arch: arm64
       script:
         - make image-build-ansible
-        - make image-push-ansible
+        # - make image-push-ansible
 
     # Build and deploy amd64 ansible-operator docker image
     - <<: *deploy
@@ -160,7 +160,7 @@ jobs:
       arch: amd64
       script:
         - make image-build-ansible
-        - make image-push-ansible
+        # - make image-push-ansible
 
     # Build and deploy ppc64le ansible-operator docker image
     - <<: *deploy
@@ -168,7 +168,7 @@ jobs:
       arch: ppc64le
       script:
         - make image-build-ansible
-        - make image-push-ansible
+        # - make image-push-ansible
 
     # Build and deploy s390x ansible-operator docker image
     - <<: *deploy
@@ -176,7 +176,7 @@ jobs:
       arch: s390x
       script:
         - make image-build-ansible
-        - make image-push-ansible
+        # - make image-push-ansible
 
     # Build and deploy arm64 helm-operator docker image
     - <<: *deploy
@@ -184,7 +184,7 @@ jobs:
       arch: arm64
       script:
         - make image-build-helm
-        - make image-push-helm
+        # - make image-push-helm
 
     # Build and deploy amd64 helm-operator docker image
     - <<: *deploy
@@ -192,7 +192,7 @@ jobs:
       arch: amd64
       script:
         - make image-build-helm
-        - make image-push-helm
+        # - make image-push-helm
 
     # Build and deploy ppc64le helm-operator docker image
     - <<: *deploy
@@ -200,7 +200,7 @@ jobs:
       arch: ppc64le
       script:
         - make image-build-helm
-        - make image-push-helm
+        # - make image-push-helm
 
     # Build and deploy s390x helm-operator docker image
     - <<: *deploy
@@ -208,7 +208,7 @@ jobs:
       arch: s390x
       script:
         - make image-build-helm
-        - make image-push-helm
+        # - make image-push-helm
 
     # Build and deploy arm64 scorecard-proxy docker image
     - <<: *deploy
@@ -216,7 +216,7 @@ jobs:
       arch: arm64
       script:
         - make image-build-scorecard-proxy
-        - make image-push-scorecard-proxy
+        # - make image-push-scorecard-proxy
 
     # Build and deploy amd64 scorecard-proxy docker image
     - <<: *deploy
@@ -224,7 +224,7 @@ jobs:
       arch: amd64
       script:
         - make image-build-scorecard-proxy
-        - make image-push-scorecard-proxy
+        # - make image-push-scorecard-proxy
 
     # Build and deploy ppc64le scorecard-proxy docker image
     - <<: *deploy
@@ -232,7 +232,7 @@ jobs:
       arch: ppc64le
       script:
         - make image-build-scorecard-proxy
-        - make image-push-scorecard-proxy
+        # - make image-push-scorecard-proxy
 
     # Build and deploy s390x scorecard-proxy docker image
     - <<: *deploy
@@ -240,7 +240,7 @@ jobs:
       arch: s390x
       script:
         - make image-build-scorecard-proxy
-        - make image-push-scorecard-proxy
+        # - make image-push-scorecard-proxy
 
     # Build and deploy ansible multi-arch manifest list
     - stage: deploy-manifest-multiarch
