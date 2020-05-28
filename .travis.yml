@@ -63,7 +63,11 @@ x_base_steps:
   - &deploy
     before_install:
       - travis_retry make tidy
-    install: make install
+    install:
+      # Travis image builds seem to fail on some arches (?) because this path
+      # does not exist.
+      - mkdir -p $GOPATH/bin
+      - make install
     before_script:
       - git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
       - git fetch --unshallow --tags
