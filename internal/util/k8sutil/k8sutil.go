@@ -31,37 +31,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // GetKubeconfigAndNamespace returns the *rest.Config and default namespace defined in the
-// kubeconfig at the specified path. If no path is provided, returns the default *rest.Config
-// and namespace
-func GetKubeconfigAndNamespace(configPath string) (*rest.Config, string, error) {
-	var clientConfig clientcmd.ClientConfig
-	var apiConfig *clientcmdapi.Config
-	var err error
-	if configPath != "" {
-		apiConfig, err = clientcmd.LoadFromFile(configPath)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to load user provided kubeconfig: %v", err)
-		}
-	} else {
-		apiConfig, err = clientcmd.NewDefaultClientConfigLoadingRules().Load()
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to get kubeconfig: %v", err)
-		}
+// kubeconfig at the specified path. If no path is provided, the default *rest.Config
+// and namespace is returned. Optional overrides are passed to the client config constructor.
+func GetKubeconfigAndNamespace(configPath string, overrides ...*clientcmd.ConfigOverrides) (*rest.Config, string, error) {
+	var override *clientcmd.ConfigOverrides
+	if len(overrides) == 0 {
+		override = &clientcmd.ConfigOverrides{}
 	}
-	clientConfig = clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{})
-	kubeconfig, err := clientConfig.ClientConfig()
+
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	rules.ExplicitPath = configPath
+	apiConfig, err := rules.Load()
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("error loading kubeconfig: %w", err)
+	}
+
+	clientConfig := clientcmd.NewDefaultClientConfig(*apiConfig, override)
+	restConfig, err := clientConfig.ClientConfig()
+	if err != nil {
+		return nil, "", fmt.Errorf("error getting REST config: %w", err)
 	}
 	namespace, _, err := clientConfig.Namespace()
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("error getting namespace: %w", err)
 	}
-	return kubeconfig, namespace, nil
+	return restConfig, namespace, nil
 }
 
 // GetDisplayName turns a project dir name in any of {snake, chain, camel}
