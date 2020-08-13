@@ -66,9 +66,9 @@ func (e ErrUnknownOperatorType) Error() string {
 	return fmt.Sprintf(`unknown operator type "%v"`, e.Type)
 }
 
-// HasProjectFile returns true if the project is configured as a kubebuilder
+// HasConfig returns true if the project is configured as a kubebuilder
 // project.
-func HasProjectFile() bool {
+func HasConfig() bool {
 	_, err := os.Stat(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {

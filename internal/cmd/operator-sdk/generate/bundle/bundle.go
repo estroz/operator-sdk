@@ -25,7 +25,6 @@ import (
 
 	"github.com/operator-framework/api/pkg/apis/scorecard/v1alpha3"
 	"github.com/operator-framework/operator-registry/pkg/lib/bundle"
-	"sigs.k8s.io/kubebuilder/pkg/model/config"
 	"sigs.k8s.io/yaml"
 
 	metricsannotations "github.com/operator-framework/operator-sdk/internal/annotations/metrics"
@@ -105,15 +104,16 @@ https://github.com/operator-framework/operator-registry/#manifest-format
 const defaultRootDir = "bundle"
 
 // setDefaults sets defaults useful to all modes of this subcommand.
-func (c *bundleCmd) setDefaults(cfg *config.Config) (err error) {
-	if c.projectName, err = genutil.GetOperatorName(cfg); err != nil {
-		return err
-	}
+func (c *bundleCmd) setDefaults() (err error) {
 	return nil
 }
 
 // validateManifests validates c for bundle manifests generation.
-func (c bundleCmd) validateManifests(*config.Config) (err error) {
+func (c bundleCmd) validateManifests() (err error) {
+	if c.projectName == "" {
+		return errors.New("--project-name must be set")
+	}
+
 	if c.version != "" {
 		if err := genutil.ValidateVersion(c.version); err != nil {
 			return err
@@ -143,7 +143,7 @@ func (c bundleCmd) validateManifests(*config.Config) (err error) {
 }
 
 // runManifests generates bundle manifests.
-func (c bundleCmd) runManifests(cfg *config.Config) (err error) {
+func (c bundleCmd) runManifests() (err error) {
 
 	if !c.quiet && !c.stdout {
 		if c.version == "" {
@@ -241,12 +241,12 @@ func writeScorecardConfig(dir string, cfg v1alpha3.Configuration) error {
 }
 
 // validateMetadata validates c for bundle metadata generation.
-func (c bundleCmd) validateMetadata(*config.Config) (err error) {
+func (c bundleCmd) validateMetadata() (err error) {
 	return nil
 }
 
 // runMetadata generates a bundle.Dockerfile and bundle metadata.
-func (c bundleCmd) runMetadata(cfg *config.Config) error {
+func (c bundleCmd) runMetadata() error {
 
 	directory := c.inputDir
 	if directory == "" {
@@ -266,11 +266,11 @@ func (c bundleCmd) runMetadata(cfg *config.Config) error {
 		outputDir = ""
 	}
 
-	return c.generateMetadata(cfg, directory, outputDir)
+	return c.generateMetadata(directory, outputDir)
 }
 
 // generateMetadata wraps the operator-registry bundle Dockerfile/metadata generator.
-func (c bundleCmd) generateMetadata(cfg *config.Config, manifestsDir, outputDir string) error {
+func (c bundleCmd) generateMetadata(manifestsDir, outputDir string) error {
 
 	metadataExists := isMetatdataExist(outputDir, manifestsDir)
 	err := bundle.GenerateFunc(manifestsDir, outputDir, c.projectName, c.channels, c.defaultChannel, c.overwrite)
@@ -285,7 +285,7 @@ func (c bundleCmd) generateMetadata(cfg *config.Config, manifestsDir, outputDir 
 			bundleRoot = filepath.Dir(manifestsDir)
 		}
 
-		if err = updateMetadata(cfg, bundleRoot); err != nil {
+		if err = updateMetadata(bundleRoot); err != nil {
 			return err
 		}
 	}
@@ -294,7 +294,7 @@ func (c bundleCmd) generateMetadata(cfg *config.Config, manifestsDir, outputDir 
 
 // TODO(estroz): these updates need to be atomic because the bundle's Dockerfile and annotations.yaml
 // cannot be out-of-sync.
-func updateMetadata(cfg *config.Config, bundleRoot string) error {
+func updateMetadata(bundleRoot string) error {
 	bundleLabels := metricsannotations.MakeBundleMetadataLabels(cfg)
 	for key, value := range scorecardannotations.MakeBundleMetadataLabels(scorecard.DefaultConfigDir) {
 		if _, hasKey := bundleLabels[key]; hasKey {

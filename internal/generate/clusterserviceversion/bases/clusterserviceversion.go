@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/kubebuilder/pkg/model/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/operator-framework/operator-sdk/internal/generate/clusterserviceversion/bases/definitions"
@@ -33,8 +34,8 @@ import (
 // ClusterServiceVersion configures the v1alpha1.ClusterServiceVersion
 // that GetBase() returns.
 type ClusterServiceVersion struct {
-	// BasePath is the path to the base being read. If empty, GetBase() returns
-	// a default base.
+	Config *config.Config
+	// BasePath is the path to the base being read. If empty, GetBase() returns a default base.
 	BasePath string
 	// OperatorName is the operator's name, ex. app-operator
 	OperatorName string
@@ -63,7 +64,7 @@ type ClusterServiceVersion struct {
 // either with default values or, if b.BasePath is set, bytes from disk.
 func (b ClusterServiceVersion) GetBase() (base *v1alpha1.ClusterServiceVersion, err error) {
 	if b.BasePath != "" {
-		if base, err = readClusterServiceVersionBase(b.BasePath); err != nil {
+		if base, err = ReadBase(b.BasePath); err != nil {
 			return nil, fmt.Errorf("error reading existing ClusterServiceVersion base %s: %v", b.BasePath, err)
 		}
 	} else {
@@ -170,9 +171,30 @@ func (b ClusterServiceVersion) makeNewBase() *v1alpha1.ClusterServiceVersion {
 	}
 }
 
-// readClusterServiceVersionBase returns the ClusterServiceVersion base at path.
-// If no base is found, readClusterServiceVersionBase returns an error.
-func readClusterServiceVersionBase(path string) (*v1alpha1.ClusterServiceVersion, error) {
+// NewBase returns a function that gets a base from inputDir.
+// apisDir is used by getBaseFunc to populate base fields.
+func NewBase(cfg *config.Config, basePath, operatorName, apisDir string, interactive bool) (*v1alpha1.ClusterServiceVersion, error) {
+	gvks := make([]schema.GroupVersionKind, len(cfg.Resources))
+	for i, gvk := range cfg.Resources {
+		gvks[i].Group = fmt.Sprintf("%s.%s", gvk.Group, cfg.Domain)
+		gvks[i].Version = gvk.Version
+		gvks[i].Kind = gvk.Kind
+	}
+
+	b := ClusterServiceVersion{
+		OperatorName: operatorName,
+		OperatorType: projutil.PluginKeyToOperatorType(cfg.Layout),
+		BasePath:     basePath,
+		APIsDir:      apisDir,
+		GVKs:         gvks,
+		Interactive:  interactive,
+	}
+	return b.GetBase()
+}
+
+// ReadBase returns the ClusterServiceVersion base at path.
+// If no base is found, ReadBase returns an error.
+func ReadBase(path string) (*v1alpha1.ClusterServiceVersion, error) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err

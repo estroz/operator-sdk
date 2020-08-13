@@ -32,7 +32,6 @@ type bundleCmd struct {
 	metadata  bool
 
 	// Common options.
-	projectName  string
 	version      string
 	inputDir     string
 	outputDir    string
@@ -41,6 +40,10 @@ type bundleCmd struct {
 	crdsDir      string
 	stdout       bool
 	quiet        bool
+
+	// Taken from the config.
+	layout      string
+	projectName string
 
 	// Metadata options.
 	channels       string
@@ -56,7 +59,7 @@ func NewCmd() *cobra.Command {
 		Short:   "Generates bundle data for the operator",
 		Long:    longHelp,
 		Example: examples,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) != 0 {
 				return fmt.Errorf("command %s doesn't accept any arguments", cmd.CommandPath())
 			}
@@ -68,36 +71,41 @@ func NewCmd() *cobra.Command {
 				c.metadata = true
 			}
 
-			cfg, err := projutil.ReadConfig()
-			if err != nil {
-				return fmt.Errorf("error reading configuration: %v", err)
+			// This command should be runnable outside a configured project, since no
+			if projutil.HasConfig() {
+				cfg, err := projutil.ReadConfig()
+				if err != nil {
+					return fmt.Errorf("error reading configuration: %v", err)
+				}
+				c.layout = cfg.Layout
+				c.projectName = cfg.ProjectName
 			}
 
-			if err := c.setDefaults(cfg); err != nil {
+			if err := c.setDefaults(); err != nil {
 				return err
 			}
 
 			// Validate command args before running so a preceding mode doesn't run
 			// before a following validation fails.
 			if c.manifests {
-				if err = c.validateManifests(cfg); err != nil {
+				if err = c.validateManifests(); err != nil {
 					return fmt.Errorf("invalid command options: %v", err)
 				}
 			}
 			if c.metadata {
-				if err = c.validateMetadata(cfg); err != nil {
+				if err = c.validateMetadata(); err != nil {
 					return fmt.Errorf("invalid command options: %v", err)
 				}
 			}
 
 			// Run command logic.
 			if c.manifests {
-				if err = c.runManifests(cfg); err != nil {
+				if err = c.runManifests(); err != nil {
 					log.Fatalf("Error generating bundle manifests: %v", err)
 				}
 			}
 			if c.metadata {
-				if err = c.runMetadata(cfg); err != nil {
+				if err = c.runMetadata(); err != nil {
 					log.Fatalf("Error generating bundle metadata: %v", err)
 				}
 			}

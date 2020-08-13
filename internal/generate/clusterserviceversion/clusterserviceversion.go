@@ -24,7 +24,6 @@ import (
 	"github.com/operator-framework/api/pkg/operators/v1alpha1"
 	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/operator-framework/operator-registry/pkg/lib/bundle"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/kubebuilder/pkg/model/config"
 
 	metricsannotations "github.com/operator-framework/operator-sdk/internal/annotations/metrics"
@@ -214,35 +213,10 @@ func makeCSVFileName(name string) string {
 }
 
 // makeKustomizeBaseGetter returns a function that gets a kustomize-style base.
-func (g Generator) makeKustomizeBaseGetter(inputDir, apisDir string, ilvl projutil.InteractiveLevel) getBaseFunc {
+func (g Generator) makeKustomizeBaseGetter(inputDir string) getBaseFunc {
 	basePath := filepath.Join(inputDir, "bases", makeCSVFileName(g.OperatorName))
-	if genutil.IsNotExist(basePath) {
-		basePath = ""
-	}
-
-	return g.makeBaseGetter(basePath, apisDir, requiresInteraction(basePath, ilvl))
-}
-
-// makeBaseGetter returns a function that gets a base from inputDir.
-// apisDir is used by getBaseFunc to populate base fields.
-func (g Generator) makeBaseGetter(basePath, apisDir string, interactive bool) getBaseFunc {
-	gvks := make([]schema.GroupVersionKind, len(g.config.Resources))
-	for i, gvk := range g.config.Resources {
-		gvks[i].Group = fmt.Sprintf("%s.%s", gvk.Group, g.config.Domain)
-		gvks[i].Version = gvk.Version
-		gvks[i].Kind = gvk.Kind
-	}
-
 	return func() (*operatorsv1alpha1.ClusterServiceVersion, error) {
-		b := bases.ClusterServiceVersion{
-			OperatorName: g.OperatorName,
-			OperatorType: g.OperatorType,
-			BasePath:     basePath,
-			APIsDir:      apisDir,
-			GVKs:         gvks,
-			Interactive:  interactive,
-		}
-		return b.GetBase()
+		return bases.ReadBase(basePath)
 	}
 }
 
