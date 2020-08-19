@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package internal
+package registry
 
 import (
 	"context"
@@ -22,14 +22,13 @@ import (
 	"time"
 
 	"github.com/operator-framework/api/pkg/operators/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/operator-framework/operator-sdk/internal/operator"
+	"github.com/operator-framework/operator-sdk/internal/olm/operator"
+	"github.com/operator-framework/operator-sdk/internal/olm/operator/registry/index"
 	registryutil "github.com/operator-framework/operator-sdk/internal/registry"
-	"github.com/operator-framework/operator-sdk/internal/util/k8sutil"
 )
 
 const (
@@ -37,6 +36,7 @@ const (
 )
 
 type IndexImageCatalogCreator struct {
+	PackageName      string
 	IndexImage       string
 	InjectBundles    []string
 	InjectBundleMode string
@@ -63,7 +63,8 @@ func (c IndexImageCatalogCreator) CreateCatalog(ctx context.Context, name string
 	fmt.Printf("IndexImageCatalogCreator.InjectBundleMode:  %q\n", c.InjectBundleMode)
 
 	// create a basic catalog source type
-	cs := newCatalogSource(name, c.cfg.Namespace)
+	cs := newCatalogSource(name, c.cfg.Namespace,
+		withSDKPublisher(c.PackageName))
 
 	// initialize and create the registry pod with provided index image
 	registryPod, err := c.createRegistryPod(ctx, dbPath)
@@ -93,29 +94,11 @@ func (c IndexImageCatalogCreator) CreateCatalog(ctx context.Context, name string
 	}
 
 	// wait for catalog source to be ready
-	if err := c.waitForCatalogSource(ctx, cs); err != nil {
+	if err := waitForCatalogSource(ctx, c.cfg, cs); err != nil {
 		return nil, err
 	}
 
 	return cs, nil
-}
-
-// newCatalogSource creates a new catalog source with name and namespace
-func newCatalogSource(name, namespace string) *v1alpha1.CatalogSource {
-	return &v1alpha1.CatalogSource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-cs", k8sutil.FormatOperatorNameDNS1123(name)),
-			Namespace: namespace,
-		},
-		Spec: v1alpha1.CatalogSourceSpec{
-			DisplayName: "CatalogSource",
-			Publisher:   "operator-sdk",
-		},
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1alpha1.SchemeGroupVersion.String(),
-			Kind:       v1alpha1.CatalogSourceKind,
-		},
-	}
 }
 
 const defaultDBPath = "/database/index.db"
@@ -131,9 +114,9 @@ func (c IndexImageCatalogCreator) getDBPath(ctx context.Context) (string, error)
 	return defaultDBPath, nil
 }
 
-func (c IndexImageCatalogCreator) createRegistryPod(ctx context.Context, dbPath string) (*RegistryPod, error) {
+func (c IndexImageCatalogCreator) createRegistryPod(ctx context.Context, dbPath string) (*index.RegistryPod, error) {
 	// Create registry pod, assigning its owner as the catalog source
-	registryPod, err := NewRegistryPod(c.cfg.Client, dbPath, c.BundleImage, c.cfg.Namespace)
+	registryPod, err := index.NewRegistryPod(c.cfg.Client, dbPath, c.BundleImage, c.cfg.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error in initializing registry pod")
 	}
@@ -144,6 +127,11 @@ func (c IndexImageCatalogCreator) createRegistryPod(ctx context.Context, dbPath 
 
 	return registryPod, nil
 }
+
+const (
+	// defaultGRPCPort is the default grpc container port that the registry pod exposes
+	defaultGRPCPort = 50051
+)
 
 func (c IndexImageCatalogCreator) updateCatalogSource(podAddr string, cs *v1alpha1.CatalogSource) error {
 	// Update catalog source with source type as grpc and address to point to the pod IP
@@ -165,7 +153,7 @@ func (c IndexImageCatalogCreator) updateCatalogSource(podAddr string, cs *v1alph
 	return nil
 }
 
-func (c IndexImageCatalogCreator) waitForCatalogSource(ctx context.Context, cs *v1alpha1.CatalogSource) error {
+func waitForCatalogSource(ctx context.Context, cfg *operator.Configuration, cs *v1alpha1.CatalogSource) error {
 	catSrcKey, err := client.ObjectKeyFromObject(cs)
 	if err != nil {
 		return fmt.Errorf("error in getting catalog source key: %v", err)
@@ -173,7 +161,7 @@ func (c IndexImageCatalogCreator) waitForCatalogSource(ctx context.Context, cs *
 
 	// verify that catalog source connection status is READY
 	catSrcCheck := wait.ConditionFunc(func() (done bool, err error) {
-		if err := c.cfg.Client.Get(ctx, catSrcKey, cs); err != nil {
+		if err := cfg.Client.Get(ctx, catSrcKey, cs); err != nil {
 			return false, err
 		}
 		if cs.Status.GRPCConnectionState != nil {

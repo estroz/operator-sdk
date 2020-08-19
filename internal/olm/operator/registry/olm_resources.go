@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package olm
+package registry
 
 import (
 	"fmt"
 
-	apimanifests "github.com/operator-framework/api/pkg/manifests"
 	operatorsv1 "github.com/operator-framework/api/pkg/operators/v1"
-	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
+	v1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/operator-framework/operator-sdk/internal/operator"
+	"github.com/operator-framework/operator-sdk/internal/olm/operator"
 	"github.com/operator-framework/operator-sdk/internal/util/k8sutil"
 )
 
@@ -31,23 +30,10 @@ func getSubscriptionName(csvName string) string {
 	return fmt.Sprintf("%s-sub", name)
 }
 
-// getChannelForCSVName returns the channel for a given csvName. csvName
-// has the format "{operator-name}.(v)?{X.Y.Z}". An error is returned if
-// no channel with current CSV name csvName is found.
-func getChannelForCSVName(pkg *apimanifests.PackageManifest, csvName string) (apimanifests.PackageChannel, error) {
-	for _, c := range pkg.Channels {
-		if c.CurrentCSVName == csvName {
-			return c, nil
-		}
-	}
-	return apimanifests.PackageChannel{}, fmt.Errorf("no channel in package manifest %s exists for CSV %s",
-		pkg.PackageName, csvName)
-}
-
 // withCatalogSource returns a function that sets the Subscription argument's
 // target CatalogSource's name and namespace.
-func withCatalogSource(csName, csNamespace string) func(*operatorsv1alpha1.Subscription) {
-	return func(sub *operatorsv1alpha1.Subscription) {
+func withCatalogSource(csName, csNamespace string) func(*v1alpha1.Subscription) {
+	return func(sub *v1alpha1.Subscription) {
 		sub.Spec.CatalogSource = csName
 		sub.Spec.CatalogSourceNamespace = csNamespace
 	}
@@ -55,14 +41,14 @@ func withCatalogSource(csName, csNamespace string) func(*operatorsv1alpha1.Subsc
 
 // withPackageChannel returns a function that sets the Subscription argument's
 // target package, channel, and starting CSV to those in channel.
-func withPackageChannel(pkgName string, channel apimanifests.PackageChannel) func(*operatorsv1alpha1.Subscription) {
-	return func(sub *operatorsv1alpha1.Subscription) {
+func withPackageChannel(pkgName, channelName, startingCSV string) func(*v1alpha1.Subscription) {
+	return func(sub *v1alpha1.Subscription) {
 		if sub.Spec == nil {
-			sub.Spec = &operatorsv1alpha1.SubscriptionSpec{}
+			sub.Spec = &v1alpha1.SubscriptionSpec{}
 		}
 		sub.Spec.Package = pkgName
-		sub.Spec.Channel = channel.Name
-		sub.Spec.StartingCSV = channel.CurrentCSVName
+		sub.Spec.Channel = channelName
+		sub.Spec.StartingCSV = startingCSV
 	}
 }
 
@@ -70,11 +56,11 @@ func withPackageChannel(pkgName string, channel apimanifests.PackageChannel) fun
 // from csvName, the CSV's objectmeta.name, in namespace. opts will be applied
 // to the Subscription object.
 func newSubscription(csvName, namespace string,
-	opts ...func(*operatorsv1alpha1.Subscription)) *operatorsv1alpha1.Subscription {
-	sub := &operatorsv1alpha1.Subscription{
+	opts ...func(*v1alpha1.Subscription)) *v1alpha1.Subscription {
+	sub := &v1alpha1.Subscription{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorsv1alpha1.SchemeGroupVersion.String(),
-			Kind:       operatorsv1alpha1.SubscriptionKind,
+			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+			Kind:       v1alpha1.SubscriptionKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getSubscriptionName(csvName),
@@ -87,28 +73,26 @@ func newSubscription(csvName, namespace string,
 	return sub
 }
 
-func getCatalogSourceName(pkgName string) string {
-	name := k8sutil.FormatOperatorNameDNS1123(pkgName)
-	return fmt.Sprintf("%s-ocs", name)
+func withSDKPublisher(pkgName string) func(*v1alpha1.CatalogSource) {
+	return func(cs *v1alpha1.CatalogSource) {
+		cs.Spec.DisplayName = pkgName
+		cs.Spec.Publisher = "operator-sdk"
+	}
 }
 
 // newCatalogSource creates a new CatalogSource with a name derived from
 // pkgName, the package manifest's packageName, in namespace. opts will
 // be applied to the CatalogSource object.
-func newCatalogSource(pkgName, namespace string,
-	opts ...func(*operatorsv1alpha1.CatalogSource)) *operatorsv1alpha1.CatalogSource {
-	cs := &operatorsv1alpha1.CatalogSource{
+func newCatalogSource(name, namespace string,
+	opts ...func(*v1alpha1.CatalogSource)) *v1alpha1.CatalogSource {
+	cs := &v1alpha1.CatalogSource{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorsv1alpha1.SchemeGroupVersion.String(),
-			Kind:       operatorsv1alpha1.CatalogSourceKind,
+			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+			Kind:       v1alpha1.CatalogSourceKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getCatalogSourceName(pkgName),
+			Name:      name,
 			Namespace: namespace,
-		},
-		Spec: operatorsv1alpha1.CatalogSourceSpec{
-			DisplayName: pkgName,
-			Publisher:   "operator-sdk",
 		},
 	}
 	for _, opt := range opts {
