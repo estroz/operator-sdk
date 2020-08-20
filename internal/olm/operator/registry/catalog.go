@@ -16,8 +16,14 @@ package registry
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/operator-framework/api/pkg/operators/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/operator-framework/operator-sdk/internal/olm/operator"
 )
 
 type CatalogCreator interface {
@@ -27,4 +33,30 @@ type CatalogCreator interface {
 // TODO: modify this as necessary.
 type InstallPlanApprover interface {
 	Approve(ctx context.Context, name string) error
+}
+
+func waitForCatalogSource(ctx context.Context, cfg *operator.Configuration, cs *v1alpha1.CatalogSource) error {
+	catSrcKey, err := client.ObjectKeyFromObject(cs)
+	if err != nil {
+		return fmt.Errorf("error in getting catalog source key: %v", err)
+	}
+
+	// verify that catalog source connection status is READY
+	catSrcCheck := wait.ConditionFunc(func() (done bool, err error) {
+		if err := cfg.Client.Get(ctx, catSrcKey, cs); err != nil {
+			return false, err
+		}
+		if cs.Status.GRPCConnectionState != nil {
+			if cs.Status.GRPCConnectionState.LastObservedState == "READY" {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+
+	if err := wait.PollImmediateUntil(200*time.Millisecond, catSrcCheck, ctx.Done()); err != nil {
+		return fmt.Errorf("catalog source connection is not ready: %v", err)
+	}
+
+	return nil
 }

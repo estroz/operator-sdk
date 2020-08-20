@@ -1,4 +1,4 @@
-// Copyright 2019 The Operator-SDK Authors
+// Copyright 2020 The Operator-SDK Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,6 +56,11 @@ func (c ConfigMapCatalogCreator) CreateCatalog(ctx context.Context, name string)
 
 	if err := c.updateCatalogSource(ctx, cs); err != nil {
 		return nil, fmt.Errorf("error updating catalog source: %w", err)
+	}
+
+	// wait for catalog source to be ready
+	if err := waitForCatalogSource(ctx, c.cfg, cs); err != nil {
+		return nil, err
 	}
 
 	return cs, nil

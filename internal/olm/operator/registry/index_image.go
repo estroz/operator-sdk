@@ -22,17 +22,14 @@ import (
 	"time"
 
 	"github.com/operator-framework/api/pkg/operators/v1alpha1"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/operator-framework/operator-sdk/internal/olm/operator"
 	"github.com/operator-framework/operator-sdk/internal/olm/operator/registry/index"
 	registryutil "github.com/operator-framework/operator-sdk/internal/registry"
-)
-
-const (
-	defaultSourceType = "grpc"
 )
 
 type IndexImageCatalogCreator struct {
@@ -57,39 +54,26 @@ func (c IndexImageCatalogCreator) CreateCatalog(ctx context.Context, name string
 		return nil, fmt.Errorf("get database path: %v", err)
 	}
 
-	fmt.Printf("IndexImageCatalogCreator.IndexImage:        %q\n", c.IndexImage)
-	fmt.Printf("IndexImageCatalogCreator.IndexImageDBPath:  %v\n", dbPath)
-	fmt.Printf("IndexImageCatalogCreator.InjectBundles:     %q\n", strings.Join(c.InjectBundles, ","))
-	fmt.Printf("IndexImageCatalogCreator.InjectBundleMode:  %q\n", c.InjectBundleMode)
+	log.Infof("IndexImageCatalogCreator.IndexImage:        %q\n", c.IndexImage)
+	log.Infof("IndexImageCatalogCreator.IndexImageDBPath:  %v\n", dbPath)
+	log.Infof("IndexImageCatalogCreator.InjectBundles:     %q\n", strings.Join(c.InjectBundles, ","))
+	log.Infof("IndexImageCatalogCreator.InjectBundleMode:  %q\n", c.InjectBundleMode)
 
 	// create a basic catalog source type
 	cs := newCatalogSource(name, c.cfg.Namespace,
 		withSDKPublisher(c.PackageName))
+	if err := c.cfg.Client.Create(ctx, cs); err != nil {
+		return nil, fmt.Errorf("error creating catalog source: %w", err)
+	}
 
 	// initialize and create the registry pod with provided index image
-	registryPod, err := c.createRegistryPod(ctx, dbPath)
+	registryPod, err := c.createRegistryPod(ctx, cs, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("error in creating registry pod: %v", err)
 	}
 
-	// get registry pod i.e corev1.Pod type
-	pod, err := registryPod.GetPod()
-	if err != nil {
-		return nil, fmt.Errorf("error in getting registry pod: %v", err)
-	}
-
-	// make catalog source the owner of registry pod object
-	if err := controllerutil.SetOwnerReference(cs, pod, c.cfg.Scheme); err != nil {
-		return nil, fmt.Errorf("error in setting registry pod owner reference: %v", err)
-	}
-
-	// wait for registry pod to be running
-	if err := registryPod.VerifyPodRunning(ctx); err != nil {
-		return nil, fmt.Errorf("registry pod is not running: %v", err)
-	}
-
 	// update catalog source with source type, address and annotations
-	if err := c.updateCatalogSource(pod.Status.PodIP, cs); err != nil {
+	if err := c.updateCatalogSource(ctx, registryPod.Status.PodIP, cs); err != nil {
 		return nil, fmt.Errorf("error in updating catalog source: %v", err)
 	}
 
@@ -114,29 +98,46 @@ func (c IndexImageCatalogCreator) getDBPath(ctx context.Context) (string, error)
 	return defaultDBPath, nil
 }
 
-func (c IndexImageCatalogCreator) createRegistryPod(ctx context.Context, dbPath string) (*index.RegistryPod, error) {
-	// Create registry pod, assigning its owner as the catalog source
-	registryPod, err := index.NewRegistryPod(c.cfg.Client, dbPath, c.BundleImage, c.cfg.Namespace)
+func (c IndexImageCatalogCreator) createRegistryPod(ctx context.Context, cs *v1alpha1.CatalogSource, dbPath string) (pod *corev1.Pod, err error) {
+	rp := &index.RegistryPod{
+		IndexImage:  c.IndexImage,
+		BundleImage: c.BundleImage,
+		DBPath:      dbPath,
+	}
+	if rp.BundleAddMode, err = index.ParseBundleAddMode(c.InjectBundleMode); err != nil {
+		return nil, err
+	}
+
+	if pod, err = rp.Create(ctx, c.cfg, cs); err != nil {
+		return nil, err
+	}
+
+	podKey, err := client.ObjectKeyFromObject(pod)
 	if err != nil {
-		return nil, fmt.Errorf("error in initializing registry pod")
+		return nil, err
 	}
+	// upon creation of new pod, poll and verify that pod status is running
+	podCheck := wait.ConditionFunc(func() (done bool, err error) {
+		err = c.cfg.Client.Get(ctx, podKey, pod)
+		if err != nil {
+			return false, fmt.Errorf("error getting pod %s: %w", podKey.Name, err)
+		}
+		return pod.Status.Phase == corev1.PodRunning, nil
+	})
 
-	if err = registryPod.Create(ctx); err != nil {
-		return nil, fmt.Errorf("error in creating registry pod")
+	// check pod status to be Running
+	// poll every 200 ms until podCheck is true or context is done
+	err = wait.PollImmediateUntil(200*time.Millisecond, podCheck, ctx.Done())
+	if err != nil {
+		return nil, fmt.Errorf("error waiting for registry pod %s to run: %v", podKey.Name, err)
 	}
-
-	return registryPod, nil
+	return pod, nil
 }
 
-const (
-	// defaultGRPCPort is the default grpc container port that the registry pod exposes
-	defaultGRPCPort = 50051
-)
-
-func (c IndexImageCatalogCreator) updateCatalogSource(podAddr string, cs *v1alpha1.CatalogSource) error {
+func (c IndexImageCatalogCreator) updateCatalogSource(_ context.Context, podAddr string, cs *v1alpha1.CatalogSource) error {
 	// Update catalog source with source type as grpc and address to point to the pod IP
-	cs.Spec.SourceType = defaultSourceType
-	cs.Spec.Address = fmt.Sprintf("%s:%v", podAddr, defaultGRPCPort)
+	cs.Spec.SourceType = v1alpha1.SourceTypeGrpc
+	cs.Spec.Address = index.GetRegistryPodHost(podAddr)
 
 	// Update catalog source with annotations for index image,
 	// injected bundle, and registry add mode
@@ -148,32 +149,6 @@ func (c IndexImageCatalogCreator) updateCatalogSource(podAddr string, cs *v1alph
 		"operators.operatorframework.io/index-image":        c.IndexImage,
 		"operators.operatorframework.io/inject-bundle-mode": c.InjectBundleMode,
 		"operators.operatorframework.io/injected-bundles":   string(injectedBundlesJSON),
-	}
-
-	return nil
-}
-
-func waitForCatalogSource(ctx context.Context, cfg *operator.Configuration, cs *v1alpha1.CatalogSource) error {
-	catSrcKey, err := client.ObjectKeyFromObject(cs)
-	if err != nil {
-		return fmt.Errorf("error in getting catalog source key: %v", err)
-	}
-
-	// verify that catalog source connection status is READY
-	catSrcCheck := wait.ConditionFunc(func() (done bool, err error) {
-		if err := cfg.Client.Get(ctx, catSrcKey, cs); err != nil {
-			return false, err
-		}
-		if cs.Status.GRPCConnectionState != nil {
-			if cs.Status.GRPCConnectionState.LastObservedState == "READY" {
-				return true, nil
-			}
-		}
-		return false, nil
-	})
-
-	if err := wait.PollImmediateUntil(200*time.Millisecond, catSrcCheck, ctx.Done()); err != nil {
-		return fmt.Errorf("catalog source connection is not ready: %v", err)
 	}
 
 	return nil

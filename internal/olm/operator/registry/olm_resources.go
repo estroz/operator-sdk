@@ -17,8 +17,8 @@ package registry
 import (
 	"fmt"
 
-	operatorsv1 "github.com/operator-framework/api/pkg/operators/v1"
-	v1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
+	v1 "github.com/operator-framework/api/pkg/operators/v1"
+	"github.com/operator-framework/api/pkg/operators/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/operator-framework/operator-sdk/internal/olm/operator"
@@ -105,8 +105,8 @@ func newCatalogSource(name, namespace string,
 // targetNamespaces to namespaces. namespaces can be length 0..N; if
 // namespaces length is 0, targetNamespaces is set to an empty string,
 // indicating a global scope.
-func withTargetNamespaces(namespaces ...string) func(*operatorsv1.OperatorGroup) {
-	return func(og *operatorsv1.OperatorGroup) {
+func withTargetNamespaces(namespaces ...string) func(*v1.OperatorGroup) {
+	return func(og *v1.OperatorGroup) {
 		if len(namespaces) != 0 && namespaces[0] != "" {
 			og.Spec.TargetNamespaces = namespaces
 		}
@@ -117,11 +117,11 @@ func withTargetNamespaces(namespaces ...string) func(*operatorsv1.OperatorGroup)
 // sdkOperatorGroupName in namespace. opts will be applied to the
 // OperatorGroup object. Note that the default OperatorGroup has a global
 // scope.
-func newSDKOperatorGroup(namespace string, opts ...func(*operatorsv1.OperatorGroup)) *operatorsv1.OperatorGroup {
-	og := &operatorsv1.OperatorGroup{
+func newSDKOperatorGroup(namespace string, opts ...func(*v1.OperatorGroup)) *v1.OperatorGroup {
+	og := &v1.OperatorGroup{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: operatorsv1.SchemeGroupVersion.String(),
-			Kind:       operatorsv1.OperatorGroupKind,
+			APIVersion: v1.SchemeGroupVersion.String(),
+			Kind:       v1.OperatorGroupKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      operator.SDKOperatorGroupName,
