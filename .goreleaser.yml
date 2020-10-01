@@ -1,0 +1,92 @@
+before:
+  hooks:
+    - go mod download
+builds:
+  - id: "operator-sdk"
+    main: ./cmd/operator-sdk
+    binary: bin/operator-sdk
+    env:
+      - CGO_ENABLED=0
+    asmflags:
+      - all=-trimpath={{ .Env.GOPATH }}
+    gcflags:
+      - all=-trimpath={{ .Env.GOPATH }}
+    ldflags:
+      - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.GitCommit={{ .Commit }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
+    goarch:
+      - amd64
+      - arm64
+      - ppc64le
+      - s390x
+    goos:
+      - linux
+      - darwin
+    ignore:
+      - goos: darwin
+        goarch: arm64
+      - goos: darwin
+        goarch: ppc64le
+      - goos: darwin
+        goarch: s390x
+
+  # ansible-operator build steps
+  - id: "ansible-operator"
+    main: ./cmd/ansible-operator
+    binary: bin/ansible-operator
+    env:
+      - CGO_ENABLED=0
+    asmflags:
+      - all=-trimpath={{ .Env.GOPATH }}
+    gcflags:
+      - all=-trimpath={{ .Env.GOPATH }}
+    ldflags:
+      - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.GitCommit={{ .Commit }}
+      - -X github.com/operator-framework/operator-sdk/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
+    goarch:
+      - amd64
+      - arm64
+      - ppc64le
+      - s390x
+    goos:
+      - linux
+      - darwin
+    ignore:
+      - goos: darwin
+        goarch: arm64
+      - goos: darwin
+        goarch: ppc64le
+      - goos: darwin
+        goarch: s390x
+
+# We don't use archives, so skip creating them.
+archives:
+- files:
+  - none*
+
+checksum:
+  name_template: 'checksums.txt'
+
+# Sign checksum files with the local default PGP key.
+signs:
+  - signature: "${artifact}.asc"
+    cmd: gpg2
+    artifacts: checksum
+
+# We use a custom changelog generator.
+changelog:
+  skip: true
+
+# TODO(estroz): configure homebrew publishing
+# brews:
+#   - name: operator-sdk
+#     ids:
+#     - operator-sdk
+
+# Close the Github milestone after the release completes.
+milestones:
+  - close: true

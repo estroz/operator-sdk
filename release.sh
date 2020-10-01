@@ -2,58 +2,27 @@
 
 set -eu
 
-if [[ $# != 1 ]]; then
-	echo "usage: $0 vX.Y.Z"
-	exit 1
+# TODO(estroz): if TAG isn't set, dry-run this rule instead of failing.
+: ${TAG?} ${K8S_VERSION?}
+
+TMP_CHANGELOG_PATH=changelog-${TAG}.md
+
+# Generate the changelog first so we can pass it to goreleaser.
+go run ./hack/generate/changelog/gen-changelog.go -tag=${TAG} -changelog="$TMP_CHANGELOG_PATH"
+
+if [[ ! -f ./bin/goreleaser ]]; then
+	curl -sfL https://install.goreleaser.com/github.com/goreleaser/goreleaser.sh | sh
 fi
 
-VER=$1
+export GOPATH="$(go env GOPATH)"
+export K8S_VERSION=$K8S_VERSION
+export GORELEASER_CURRENT_TAG=$TAG
+./bin/goreleaser release \
+	--release-notes="$TMP_CHANGELOG_PATH" \
+	--parallelism 5 \
+	\ --snapshot
+	\ --skip-publish
+	\ --rm-dist
 
-NUMRE="0|[1-9][0-9]*"
-PRERE="\-(alpha|beta|rc)\.[1-9][0-9]*"
-
-if ! [[ "$VER" =~ ^v($NUMRE)\.($NUMRE)\.($NUMRE)($PRERE)?$ ]]; then
-	echo "malformed version: \"$VER\""
-	exit 1
-fi
-
-if git ls-files --others --exclude-standard | grep -Ev 'build/operator-sdk-v.+'; then
-	echo "directory has untracked files"
-	exit 1
-fi
-
-if ! git diff-index --quiet HEAD --; then
-	echo "directory has uncommitted files"
-	exit 1
-fi
-
-GO_VER="1.15"
-if ! go version | cut -d" " -f3 | grep -q "$GO_VER"; then
-	echo "must compile binaries with Go compiler version v${GO_VER}"
-	exit 1
-fi
-
-# Detect whether versions in code were updated.
-VER_FILE="internal/version/version.go"
-CURR_VER="$(sed -nr 's|\s+Version\s+= "(.+)"|\1|p' "$VER_FILE" | tr -d ' \t\n')"
-if [[ "$VER" != "$CURR_VER" ]]; then
-	echo "version is not set correctly in $VER_FILE"
-	exit 1
-fi
-
-INSTALL_GUIDE_FILE="website/content/en/docs/installation/install-operator-sdk.md"
-CURR_VER_INSTALL_GUIDE_FILE="$(sed -nr 's/.*RELEASE_VERSION=(.+)/\1/p' "$INSTALL_GUIDE_FILE" | tr -d ' \t\n')"
-if [[ "$VER" != "$CURR_VER_INSTALL_GUIDE_FILE" ]]; then
-	echo "version '$VER' is not set correctly in $INSTALL_GUIDE_FILE"
-	exit 1
-fi
-
-# Tag the release commit and verify its tag.
-git tag --sign --message "Operator SDK $VER" "$VER"
-git verify-tag --verbose "$VER"
-
-# Run the release builds.
-make release V=1
-
-# Verify the signatures
-for f in $(ls build/*.asc); do gpg --verify $f; done
+rm -f ./changelog/fragments/!(00-template.yaml)
+rm -f "$TMP_CHANGELOG_PATH"

@@ -76,6 +76,11 @@ all: format test build/operator-sdk ## Test and Build the Operator SDK
 install: ## Install the binaries
 	$(Q)$(GOARGS) go install $(GO_BUILD_ARGS) ./cmd/operator-sdk ./cmd/ansible-operator ./cmd/helm-operator
 
+build/%: $(SOURCES) ## Build the operator-sdk binary
+	$(Q){ \
+	cmdpkg=$$(echo $* | sed -E "s/(operator-sdk|ansible-operator|helm-operator).*/\1/"); \
+	$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$$cmdpkg; \
+	}
 
 # Code management.
 .PHONY: format tidy clean cli-doc lint
@@ -128,66 +133,10 @@ bindata:
 ##@ Release
 
 # Build/install/release the SDK.
-.PHONY: release_builds release
+.PHONY: release
 
-release_builds := \
-	build/operator-sdk-$(GIT_VERSION)-aarch64-linux-gnu \
-	build/operator-sdk-$(GIT_VERSION)-x86_64-linux-gnu \
-	build/operator-sdk-$(GIT_VERSION)-x86_64-apple-darwin \
-	build/operator-sdk-$(GIT_VERSION)-ppc64le-linux-gnu \
-	build/operator-sdk-$(GIT_VERSION)-s390x-linux-gnu \
-	build/ansible-operator-$(GIT_VERSION)-aarch64-linux-gnu \
-	build/ansible-operator-$(GIT_VERSION)-x86_64-linux-gnu \
-	build/ansible-operator-$(GIT_VERSION)-x86_64-apple-darwin \
-	build/ansible-operator-$(GIT_VERSION)-ppc64le-linux-gnu \
-	build/ansible-operator-$(GIT_VERSION)-s390x-linux-gnu \
-	build/helm-operator-$(GIT_VERSION)-aarch64-linux-gnu \
-	build/helm-operator-$(GIT_VERSION)-x86_64-linux-gnu \
-	build/helm-operator-$(GIT_VERSION)-x86_64-apple-darwin \
-	build/helm-operator-$(GIT_VERSION)-ppc64le-linux-gnu \
-	build/helm-operator-$(GIT_VERSION)-s390x-linux-gnu
-
-release: clean $(release_builds) $(release_builds:=.asc) ## Release the Operator SDK
-
-build/operator-sdk-%-aarch64-linux-gnu: GOARGS = GOOS=linux GOARCH=arm64
-build/operator-sdk-%-x86_64-linux-gnu: GOARGS = GOOS=linux GOARCH=amd64
-build/operator-sdk-%-x86_64-apple-darwin: GOARGS = GOOS=darwin GOARCH=amd64
-build/operator-sdk-%-ppc64le-linux-gnu: GOARGS = GOOS=linux GOARCH=ppc64le
-build/operator-sdk-%-s390x-linux-gnu: GOARGS = GOOS=linux GOARCH=s390x
-build/operator-sdk-%-linux-gnu: GOARGS = GOOS=linux
-
-build/ansible-operator-%-aarch64-linux-gnu: GOARGS = GOOS=linux GOARCH=arm64
-build/ansible-operator-%-x86_64-linux-gnu: GOARGS = GOOS=linux GOARCH=amd64
-build/ansible-operator-%-x86_64-apple-darwin: GOARGS = GOOS=darwin GOARCH=amd64
-build/ansible-operator-%-ppc64le-linux-gnu: GOARGS = GOOS=linux GOARCH=ppc64le
-build/ansible-operator-%-s390x-linux-gnu: GOARGS = GOOS=linux GOARCH=s390x
-build/ansible-operator-%-linux-gnu: GOARGS = GOOS=linux
-
-build/helm-operator-%-aarch64-linux-gnu: GOARGS = GOOS=linux GOARCH=arm64
-build/helm-operator-%-x86_64-linux-gnu: GOARGS = GOOS=linux GOARCH=amd64
-build/helm-operator-%-x86_64-apple-darwin: GOARGS = GOOS=darwin GOARCH=amd64
-build/helm-operator-%-ppc64le-linux-gnu: GOARGS = GOOS=linux GOARCH=ppc64le
-build/helm-operator-%-s390x-linux-gnu: GOARGS = GOOS=linux GOARCH=s390x
-build/helm-operator-%-linux-gnu: GOARGS = GOOS=linux
-
-build/%: $(SOURCES) ## Build the operator-sdk binary
-	$(Q){ \
-	cmdpkg=$$(echo $* | sed -E "s/(operator-sdk|ansible-operator|helm-operator).*/\1/"); \
-	$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$$cmdpkg; \
-	}
-
-build/%.asc: ## Create release signatures for operator-sdk release binaries
-	$(Q){ \
-	default_key=$$(gpgconf --list-options gpg | awk -F: '$$1 == "default-key" { gsub(/"/,""); print toupper($$10)}'); \
-	git_key=$$(git config --get user.signingkey | awk '{ print toupper($$0) }'); \
-	if [ "$${default_key}" = "$${git_key}" ]; then \
-		gpg --output $@ --detach-sig build/$*; \
-		gpg --verify $@ build/$*; \
-	else \
-		echo "git and/or gpg are not configured to have default signing key $${default_key}"; \
-		exit 1; \
-	fi; \
-	}
+release: ## Release the Operator SDK
+	TAG=$(TAG) K8S_VERSION=$(K8S_VERSION) ./release.sh
 
 # Image build/push.
 .PHONY: image image-build image-push

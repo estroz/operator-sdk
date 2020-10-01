@@ -1,4 +1,8 @@
-FROM registry.access.redhat.com/ubi8/ubi
+FROM golang:alpine AS builder
+
+
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 RUN mkdir -p /etc/ansible \
     && echo "localhost ansible_connection=local" > /etc/ansible/hosts \
