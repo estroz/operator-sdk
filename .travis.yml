@@ -155,7 +155,7 @@ jobs:
           --push \
           --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
           --dockerfile ./images/operator-sdk/Dockerfile \
-          --tags quay.io/operator-framework/operator-sdk:$TRAVIS_BRANCH
+          --tags $TAGS
 
     - <<: *deploy
       name: helm-operator image
@@ -172,7 +172,7 @@ jobs:
           --push \
           --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
           --dockerfile ./images/helm-operator/Dockerfile \
-          --tags quay.io/operator-framework/helm-operator:$TRAVIS_BRANCH
+          --tags $TAGS
 
     - <<: *deploy
       name: ansible-operator image
@@ -189,7 +189,7 @@ jobs:
           --push \
           --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
           --dockerfile ./images/ansible-operator/Dockerfile \
-          --tags quay.io/operator-framework/ansible-operator:$TRAVIS_BRANCH
+          --tags $TAGS
 
     - <<: *deploy
       name: scorecard-test image
@@ -206,7 +206,7 @@ jobs:
           --push \
           --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
           --dockerfile ./images/scorecard-test/Dockerfile \
-          --tags quay.io/operator-framework/scorecard-test:$TRAVIS_BRANCH
+          --tags $TAGS
 
     - <<: *deploy
       name: scorecard-test-kuttl image

@@ -1,10 +1,14 @@
+FROM golang:1.15 as builder
+
+WORKDIR /go/src
+COPY . .
+
+RUN make build/operator-sdk
+
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 RUN microdnf install -y golang make which
 
-ARG TARGETOS
-ARG TARGETARCH
-ARG BIN=dist/operator-sdk_${TARGETOS}_${TARGETARCH}/operator-sdk
-COPY $BIN /usr/local/bin/operator-sdk
+COPY --from=builder /go/src/build/operator-sdk /usr/local/bin/operator-sdk
 
 ENTRYPOINT ["/usr/local/bin/operator-sdk"]

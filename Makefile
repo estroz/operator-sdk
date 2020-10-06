@@ -156,8 +156,8 @@ image-build-helm: build/helm-operator
 
 # operator-sdk binary image build.
 .PHONY: image-build-sdk
-image-build-sdk: build/operator-sdk
-	docker build -f ./images/operator-sdk/Dockerfile -t $(HELM_BASE_IMAGE):dev --build-arg BIN=build/operator-sdk .
+image-build-sdk:
+	docker build -f ./images/operator-sdk/Dockerfile -t $(OPERATOR_SDK_BASE_IMAGE):dev .
 
 # Scorecard custom test image build.
 .PHONY: image-build-custom-scorecard-tests

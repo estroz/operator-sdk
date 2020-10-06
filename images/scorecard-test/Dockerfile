@@ -1,6 +1,6 @@
 FROM golang:1.15-alpine as builder
 
-ENV WD=/go/src/operator-sdk
+ENV WD=/go/src
 WORKDIR $WD
 COPY . .
 
@@ -19,5 +19,5 @@ RUN echo "${USER_NAME}:x:${USER_UID}:0:${USER_NAME} user:${HOME}:/sbin/nologin" 
 WORKDIR ${HOME}
 USER ${USER_UID}
 
-COPY --from=builder /go/src/operator-sdk/scorecard-test /usr/local/bin/scorecard-test
+COPY --from=builder /go/src/scorecard-test /usr/local/bin/scorecard-test
 ENTRYPOINT ["/usr/local/bin/scorecard-test"]

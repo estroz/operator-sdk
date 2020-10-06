@@ -82,7 +82,7 @@ else
   docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
   docker buildx rm operator-sdk-builder 2>&1 > /dev/null || true
   docker buildx create --name operator-sdk-builder --use
-  docker buildx build --push -f $DOCKERFILE -t $FIRST_TAG --platform $PLATFORMS .
+  docker buildx build --load -f $DOCKERFILE -t $FIRST_TAG --platform $PLATFORMS .
 fi
 
 # Create the rest of the specified tags.
