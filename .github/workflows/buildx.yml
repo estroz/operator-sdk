@@ -1,0 +1,41 @@
+name: buildx
+
+on:
+  push:
+
+jobs:
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          version: latest
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: all
+      -
+        name: Builder instance name
+        run: echo ${{ steps.buildx.outputs.name }}
+      -
+        name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
+      -
+        name: build multiarch operator-sdk
+        run: |-
+          docker buildx build --load -f ./images/operator-sdk/Dockerfile -t operator-sdk:latest --platform linux/s390x,linux/arm64 .
+      -
+        name: build multiarch ansible-operator
+        run: |-
+          docker buildx build --load -f ./images/ansible-operator/Dockerfile -t ansible-operator:latest --platform linux/s390x,linux/arm64 .
+      -
+        name: build multiarch helm-operator
+        run: |-
+          docker buildx build --load -f ./images/helm-operator/Dockerfile -t helm-operator:latest --platform linux/s390x,linux/arm64 .

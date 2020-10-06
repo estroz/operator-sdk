@@ -26,7 +26,7 @@ DOCKERFILE=
 # This list is required.
 TAGS=
 # If set, all build images will be pushed (assuming registry access is configured).
-PUSH=false
+PUSH=
 
 set -x
 
@@ -79,6 +79,7 @@ else
   # Check if buildx is supported, and use it if so.
   check_docker_version
   export DOCKER_CLI_EXPERIMENTAL=enabled
+  docker run --privileged --rm tonistiigi/binfmt --install all
   docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
   docker buildx rm operator-sdk-builder 2>&1 > /dev/null || true
   docker buildx create --name operator-sdk-builder --use
@@ -92,7 +93,7 @@ done
 
 # Push images remotely. This assumes DOCKER_USERNAME and DOCKER_PASSWORD have been set externally.
 if [[ -n "$PUSH" ]]; then
-  docker_login
+  docker_login $FIRST_TAG
   docker push $FIRST_TAG
   for tag in "${TAG_LIST[@]}"; do
     docker push $tag

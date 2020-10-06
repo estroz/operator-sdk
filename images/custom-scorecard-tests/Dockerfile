@@ -6,6 +6,7 @@ COPY images/custom-scorecard-tests .
 
 ENV CGO_ENABLED=0
 RUN go mod init custom-scorecard-tests
+RUN GOPROXY="https://proxy.golang.org|direct" go mod download
 RUN go build -o custom-scorecard-tests -gcflags "all=-trimpath=${WD}" -asmflags "all=-trimpath=${WD}"
 
 # Base image

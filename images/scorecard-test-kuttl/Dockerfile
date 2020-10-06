@@ -6,6 +6,7 @@ COPY images/scorecard-test-kuttl .
 
 ENV CGO_ENABLED=0
 RUN go mod init scorecard-test-kuttl
+RUN GOPROXY="https://proxy.golang.org|direct" go mod download
 RUN go build -o scorecard-test-kuttl -gcflags "all=-trimpath=${WD}" -asmflags "all=-trimpath=${WD}"
 
 # Base image

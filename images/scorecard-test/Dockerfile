@@ -5,6 +5,7 @@ WORKDIR $WD
 COPY . .
 
 ENV CGO_ENABLED=0
+RUN GOPROXY="https://proxy.golang.org|direct" go mod download
 RUN go build -o scorecard-test -gcflags "all=-trimpath=${WD}" -asmflags "all=-trimpath=${WD}" ./images/scorecard-test
 
 # Base image

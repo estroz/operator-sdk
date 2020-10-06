@@ -1,3 +1,11 @@
+FROM golang:1.15 as builder
+
+WORKDIR /go/src
+COPY . .
+
+RUN GOPROXY="https://proxy.golang.org|direct" go mod download
+RUN make build/ansible-operator
+
 FROM registry.access.redhat.com/ubi8/ubi:latest
 
 RUN mkdir -p /etc/ansible \
@@ -40,9 +48,6 @@ RUN TINIARCH=$(case $(arch) in x86_64) echo -n amd64 ;; ppc64le) echo -n ppc64el
 WORKDIR ${HOME}
 USER ${USER_UID}
 
-ARG TARGETOS
-ARG TARGETARCH
-ARG BIN=dist/ansible-operator_${TARGETOS}_${TARGETARCH}/ansible-operator
-COPY $BIN /usr/local/bin/ansible-operator
+COPY --from=builder /go/src/build/ansible-operator /usr/local/bin/ansible-operator
 
 ENTRYPOINT ["/tini", "--", "/usr/local/bin/ansible-operator", "run", "--watches-file=./watches.yaml"]
