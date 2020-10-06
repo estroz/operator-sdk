@@ -138,80 +138,41 @@ bindata:
 release: ## Release the Operator SDK
 	TAG=$(TAG) K8S_VERSION=$(K8S_VERSION) ./release.sh
 
-# Image build/push.
-.PHONY: image image-build image-push
+# TODO(estroz): inject GOMODCACHE into image builds as a volume to avoid re-pulling modules each build.
 
-image: image-build image-push ## Build and push all images
+# Image build.
+.PHONY: image
+image: image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk ## Build all images
 
-image-build: image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk ## Build all images
+# Ansible operator image build.
+.PHONY: image-build-ansible
+image-build-ansible: build/ansible-operator
+	docker build -f ./images/ansible-operator/Dockerfile -t $(ANSIBLE_BASE_IMAGE):dev --build-arg BIN=build/ansible-operator .
 
-image-push: image-push-ansible image-push-helm image-push-scorecard-test image-push-scorecard-test-kuttl image-push-sdk ## Push all images
+# Helm operator image build.
+.PHONY: image-build-helm
+image-build-helm: build/helm-operator
+	docker build -f ./images/helm-operator/Dockerfile -t $(HELM_BASE_IMAGE):dev --build-arg BIN=build/helm-operator .
 
-# Ansible operator image build/push.
-.PHONY: image-build-ansible image-push-ansible image-push-ansible-multiarch
+# operator-sdk binary image build.
+.PHONY: image-build-sdk
+image-build-sdk: build/operator-sdk
+	docker build -f ./images/operator-sdk/Dockerfile -t $(HELM_BASE_IMAGE):dev --build-arg BIN=build/operator-sdk .
 
-image-build-ansible: build/ansible-operator-dev-linux-gnu
-	./hack/image/build-ansible-image.sh $(ANSIBLE_BASE_IMAGE):dev
-
-image-push-ansible:
-	./hack/image/push-image-tags.sh $(ANSIBLE_BASE_IMAGE):dev $(ANSIBLE_IMAGE)-$(shell go env GOARCH)
-
-image-push-ansible-multiarch:
-	./hack/image/push-manifest-list.sh $(ANSIBLE_IMAGE) ${ANSIBLE_ARCHES}
-
-# Helm operator image build/push.
-.PHONY: image-build-helm image-push-helm image-push-helm-multiarch
-
-image-build-helm: build/helm-operator-dev-linux-gnu
-	./hack/image/build-helm-image.sh $(HELM_BASE_IMAGE):dev
-
-image-push-helm:
-	./hack/image/push-image-tags.sh $(HELM_BASE_IMAGE):dev $(HELM_IMAGE)-$(shell go env GOARCH)
-
-image-push-helm-multiarch:
-	./hack/image/push-manifest-list.sh $(HELM_IMAGE) ${HELM_ARCHES}
-
-.PHONY: image-build-sdk image-push-sdk image-push-sdk-multiarch
-
-image-build-sdk: build/operator-sdk-dev-linux-gnu
-	./hack/image/build-sdk-image.sh $(OPERATOR_SDK_BASE_IMAGE):dev
-
-image-push-sdk:
-	./hack/image/push-image-tags.sh $(OPERATOR_SDK_BASE_IMAGE):dev $(OPERATOR_SDK_IMAGE)-$(shell go env GOARCH)
-
-image-push-sdk-multiarch:
-	./hack/image/push-manifest-list.sh $(OPERATOR_SDK_IMAGE) ${OPERATOR_SDK_ARCHES}
-
-
-# Scorecard custom test image build/push.
+# Scorecard custom test image build.
 .PHONY: image-build-custom-scorecard-tests
-
 image-build-custom-scorecard-tests:
-	./hack/image/build-custom-scorecard-tests-image.sh $(CUSTOM_SCORECARD_TESTS_BASE_IMAGE):dev
+	docker build -f ./images/custom-scorecard-tests/Dockerfile -t $(CUSTOM_SCORECARD_TESTS_BASE_IMAGE):dev .
 
-# Scorecard test image build/push.
-.PHONY: image-build-scorecard-test image-push-scorecard-test image-push-scorecard-test-multiarch
-
+# Scorecard test image build.
+.PHONY: image-build-scorecard-test
 image-build-scorecard-test:
-	./hack/image/build-scorecard-test-image.sh $(SCORECARD_TEST_BASE_IMAGE):dev
+	docker build -f ./images/scorecard-test/Dockerfile -t $(SCORECARD_TEST_BASE_IMAGE):dev .
 
-image-push-scorecard-test:
-	./hack/image/push-image-tags.sh $(SCORECARD_TEST_BASE_IMAGE):dev $(SCORECARD_TEST_IMAGE)-$(shell go env GOARCH)
-
-image-push-scorecard-test-multiarch:
-	./hack/image/push-manifest-list.sh $(SCORECARD_TEST_IMAGE) ${SCORECARD_TEST_ARCHES}
-
-# Scorecard test kuttl image build/push.
-.PHONY: image-build-scorecard-test-kuttl image-push-scorecard-test-kuttl image-push-scorecard-test-kuttl-multiarch
-
+# Scorecard test kuttl image build.
+.PHONY: image-build-scorecard-test-kuttl
 image-build-scorecard-test-kuttl:
-	./hack/image/build-scorecard-test-kuttl-image.sh $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev
-
-image-push-scorecard-test-kuttl:
-	./hack/image/push-image-tags.sh $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev $(SCORECARD_TEST_KUTTL_IMAGE)-$(shell go env GOARCH)
-
-image-push-scorecard-test-kuttl-multiarch:
-	./hack/image/push-manifest-list.sh $(SCORECARD_TEST_KUTTL_IMAGE) ${SCORECARD_TEST_KUTTL_ARCHES}
+	docker build -f ./images/scorecard-test-kuttl/Dockerfile -t $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev .
 
 ##############################
 # Tests                      #

@@ -5,8 +5,13 @@ ENV HOME=/opt/helm \
     USER_UID=1001
 
 RUN echo "${USER_NAME}:x:${USER_UID}:0:${USER_NAME} user:${HOME}:/sbin/nologin" >> /etc/passwd
-COPY helm-operator-dev-linux-gnu /usr/local/bin/helm-operator
 
 WORKDIR ${HOME}
 USER ${USER_UID}
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG BIN=dist/helm-operator_${TARGETOS}_${TARGETARCH}/helm-operator
+COPY $BIN /usr/local/bin/helm-operator
+
 ENTRYPOINT ["/usr/local/bin/helm-operator", "run", "--watches-file=./watches.yaml"]

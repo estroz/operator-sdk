@@ -2,8 +2,13 @@
 
 set -eu
 
-# TODO(estroz): if TAG isn't set, dry-run this rule instead of failing.
 : ${TAG?} ${K8S_VERSION?}
+
+DRYRUN_FLAGS=
+if [[ -n "$DRYRUN" ]]; then
+	echo "Dry run release, nothing will be published"
+	DRYRUN_FLAGS="--snapshot --skip-publish --rm-dist"
+fi
 
 TMP_CHANGELOG_PATH=changelog-${TAG}.md
 
@@ -17,12 +22,9 @@ fi
 export GOPATH="$(go env GOPATH)"
 export K8S_VERSION=$K8S_VERSION
 export GORELEASER_CURRENT_TAG=$TAG
-./bin/goreleaser release \
+./bin/goreleaser release $DRYRUN_FLAGS \
 	--release-notes="$TMP_CHANGELOG_PATH" \
-	--parallelism 5 \
-	\ --snapshot
-	\ --skip-publish
-	\ --rm-dist
+	--parallelism 5 # Set this to the size of the largest build matrix of all "builds" items.
 
 rm -f ./changelog/fragments/!(00-template.yaml)
 rm -f "$TMP_CHANGELOG_PATH"
