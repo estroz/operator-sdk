@@ -1,5 +1,4 @@
-ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM golang:1.15-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.15.2-alpine as builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -12,7 +11,7 @@ ENV WD=/app
 WORKDIR $WD
 COPY images/scorecard-test-kuttl .
 
-RUN go mod init scorecard-test-kuttl && go mod download
+RUN go mod init scorecard-test-kuttl
 RUN go build -o scorecard-test-kuttl -gcflags "all=-trimpath=${WD}" -asmflags "all=-trimpath=${WD}"
 
 # Base image

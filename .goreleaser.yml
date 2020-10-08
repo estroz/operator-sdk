@@ -1,23 +1,24 @@
 before:
   hooks:
+    - go version | grep --quiet "go1\.15\.2" || echo "Go binary version must be 1.15.2"
     - go mod download
 builds:
-  - id: "operator-sdk"
+  - id: operator-sdk
     main: ./cmd/operator-sdk
     binary: operator-sdk
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-      - PWD=$(pwd)
+      - REPO=github.com/operator-framework/operator-sdk
+    mod_timestamp: "{{ .CommitTimestamp }}"
     asmflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     gcflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     ldflags:
-      - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitCommit={{ .Commit }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
+      - -X {{ .Env.REPO }}/internal/version.Version={{ if not .IsSnapshot }}v{{ end }}{{ .Version }}
+      - -X {{ .Env.REPO }}/internal/version.GitCommit={{ .FullCommit }}
+      - -X {{ .Env.REPO }}/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
     goarch:
       - amd64
       - arm64
@@ -35,22 +36,22 @@ builds:
         goarch: s390x
 
   # ansible-operator build steps
-  - id: "ansible-operator"
+  - id: ansible-operator
     main: ./cmd/ansible-operator
     binary: ansible-operator
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-      - PWD=$(pwd)
+      - REPO=github.com/operator-framework/operator-sdk
+    mod_timestamp: "{{ .CommitTimestamp }}"
     asmflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     gcflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     ldflags:
-      - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitCommit={{ .Commit }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
+      - -X {{ .Env.REPO }}/internal/version.Version={{ if not .IsSnapshot }}v{{ end }}{{ .Version }}
+      - -X {{ .Env.REPO }}/internal/version.GitCommit={{ .FullCommit }}
+      - -X {{ .Env.REPO }}/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
     goarch:
       - amd64
       - arm64
@@ -68,22 +69,22 @@ builds:
         goarch: s390x
 
   # helm-operator build steps
-  - id: "helm-operator"
+  - id: helm-operator
     main: ./cmd/helm-operator
     binary: helm-operator
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-      - PWD=$(pwd)
+      - REPO=github.com/operator-framework/operator-sdk
+    mod_timestamp: "{{ .CommitTimestamp }}"
     asmflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     gcflags:
-      - all=-trimpath={{ dir .Env.PWD }}
+      - all=-trimpath={{ dir .ArtifactPath | dir | dir | dir }}
     ldflags:
-      - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.GitCommit={{ .Commit }}
-      - -X github.com/operator-framework/operator-sdk/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
+      - -X {{ .Env.REPO }}/internal/version.Version={{ if not .IsSnapshot }}v{{ end }}{{ .Version }}
+      - -X {{ .Env.REPO }}/internal/version.GitCommit={{ .FullCommit }}
+      - -X {{ .Env.REPO }}/internal/version.KubernetesVersion={{ .Env.K8S_VERSION }}
     goarch:
       - amd64
       - arm64
@@ -100,6 +101,10 @@ builds:
       - goos: darwin
         goarch: s390x
 
+# Use most recent tag and short commit for snapshot version.
+snapshot:
+  name_template: "{{ .Tag }}"
+
 # We don't use archives, so skip creating them.
 archives:
   - format: binary
@@ -108,10 +113,11 @@ checksum:
   name_template: 'checksums.txt'
 
 # Sign checksum files with the local default PGP key.
-signs:
-  - signature: "${artifact}.asc"
-    cmd: gpg2
-    artifacts: checksum
+# TODO(estroz): configure CI PGP key
+# signs:
+#   - signature: "${artifact}.asc"
+#     cmd: gpg2
+#     artifacts: checksum
 
 # We use a custom changelog generator.
 changelog:
@@ -122,7 +128,3 @@ changelog:
 #   - name: operator-sdk
 #     ids:
 #     - operator-sdk
-
-# Close the Github milestone after the release completes.
-milestones:
-  - close: true

@@ -9,8 +9,6 @@ else
   Q = @
 endif
 
-export CGO_ENABLED := 0
-
 GIT_VERSION = $(shell git describe --dirty --tags --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
 K8S_VERSION = v1.18.2
@@ -21,15 +19,19 @@ IMAGE_REPO ?= quay.io/operator-framework
 PKGS = $(shell go list ./... | grep -v /vendor/)
 TEST_PKGS = $(shell go list ./... | grep -v -E 'github.com/operator-framework/operator-sdk/test/')
 SOURCES = $(shell find . -name '*.go' -not -path "*/vendor/*")
-BUILDPLATFORM ?= $(shell go env GOOS)/$(shell go env GOARCH)
 # GO_BUILD_ARGS should be set when running 'go build' or 'go install'.
 GO_BUILD_ARGS = \
-  -gcflags "all=-trimpath=$(shell go env GOPATH)" \
-  -asmflags "all=-trimpath=$(shell go env GOPATH)" \
+  -gcflags "all=-trimpath=$(shell dirname $$(pwd))" \
+  -asmflags "all=-trimpath=$(shell dirname $$(pwd))" \
   -ldflags " \
-    -X '$(REPO)/internal/version.GitVersion=$(GIT_VERSION)' \
+    -X '$(REPO)/internal/version.Version=$(GIT_VERSION)' \
     -X '$(REPO)/internal/version.GitCommit=$(GIT_COMMIT)' \
+    -X '$(REPO)/internal/version.KubernetesVersion=$(K8S_VERSION)' \
   " \
+
+export CGO_ENABLED := 0
+# Required for the docker buildx plugin.
+export DOCKER_CLI_EXPERIMENTAL := enabled
 
 .DEFAULT_GOAL := help
 
@@ -95,19 +97,15 @@ samples: ## Generate samples
 bindata: ## Generate bindata
 	./hack/generate/olm_bindata.sh $(OLM_VERSION)
 
-build/%: $(SOURCES) ## Build the operator-sdk binary
-	$(Q)$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$(patsubst build/,,$*)
+build/%: $(SOURCES) ## Build operator-sdk project binaries
+	$(Q)$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$*
 
-# TODO(estroz): inject GOMODCACHE into image builds as a volume to avoid re-pulling modules each build.
+image/%: ## Build multi-stage docker images.
+	$(MAKE) -f ./images/Makefile $@ IMAGE_TAGS=$(IMAGE_REPO)/$*:dev
 
-# Image build.
-image/%:
-ifeq ($(findstring scorecard,$*),)
-	$(MAKE) build/$*
-	docker build -f ./images/$*/Dockerfile -t $(IMAGE_REPO)/$*:dev --build-arg BIN=build/$* .
-else
-	docker build -f ./images/$*/Dockerfile -t $(IMAGE_REPO)/$*:dev --build-arg BUILDPLATFORM=$(BUILDPLATFORM) .
-endif
+# Build the image then load it if using a kind cluster. Meant for internal use.
+build-load-image/%: image/%
+	@[ "$(shell kubectl config current-context)" = "kind-kind" ] && command -v kind > /dev/null && kind load docker-image $(IMAGE_REPO)/$*:dev || true
 
 ##############################
 # Tests                      #
@@ -147,16 +145,16 @@ test-subcommand-olm-install:
 
 test-e2e: test-e2e-go test-e2e-ansible test-e2e-ansible-molecule test-e2e-helm ## Run the e2e tests
 
-test-e2e-go: image/scorecard-test image/custom-scorecard-tests
+test-e2e-go: build-load-image/scorecard-test build-load-image/custom-scorecard-tests
 	./hack/tests/e2e-go.sh
 
-test-e2e-ansible: image/ansible-operator image/scorecard-test
+test-e2e-ansible: build-load-image/ansible-operator build-load-image/scorecard-test
 	./hack/tests/e2e-ansible.sh
 
-test-e2e-ansible-molecule: image/ansible-operator
+test-e2e-ansible-molecule: build-load-image/ansible-operator
 	./hack/tests/e2e-ansible-molecule.sh
 
-test-e2e-helm: image/helm-operator image/scorecard-test
+test-e2e-helm: build-load-image/helm-operator build-load-image/scorecard-test
 	./hack/tests/e2e-helm.sh
 
 # Integration tests.

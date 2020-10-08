@@ -1,6 +1,5 @@
 os: linux
-# go modules require xenial for mercurial TLS 1.2 support
-dist: xenial
+dist: bionic
 
 # Install python3 and utilities dependencies
 addons:
@@ -8,11 +7,10 @@ addons:
     packages:
       - "python3"
       - "python3-pip"
-      - docker-ce
 
 language: go
 go:
-- 1.15.x
+- 1.15.2
 go_import_path: github.com/operator-framework/operator-sdk
 
 # Python 3.6 is the default Python when language: python.
@@ -21,11 +19,12 @@ go_import_path: github.com/operator-framework/operator-sdk
 # Because of it the global env is required.
 env:
   global:
-    - PATH=/opt/python/3.6.7/bin:$PATH
+    - PATH=/opt/python/3.6.7/bin:/tmp/operator-sdk/bin:${PATH}
 
 cache:
   directories:
-    - $HOME/.cache/go-build
+    - $(go env GOCACHE)
+    - $(go env GOPATH)/pkg/mod
 
 branches:
   except:
@@ -38,9 +37,6 @@ branches:
 x_base_steps:
   # Base go, ansbile, and helm job
   - &test
-    env:
-    - CLUSTER=k8s
-    # before_install for jobs that require go builds and do not run for doc-only changes
     before_install:
       # hack/ci/check-doc-only-update.sh needs to be sourced so
       # that it can properly exit the test early with success
@@ -48,34 +44,45 @@ x_base_steps:
       - travis_retry make tidy
       - git fetch origin --unshallow --tags
     install:
+      # The latest version of docker-ce contains the buildx plugin, a requirement for multi-arch builds.
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - sudo apt-get update
+      - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
       - make install
       - make setup-k8s
       - export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
-    after_success:
-      - echo "Tests passed"
+      # buildx requires certain images be pre-pulled (bug)
+      # See https://github.com/moby/buildkit/issues/1271
+      - docker pull golang:1.15.2
+      - docker pull golang:1.15.2-alpine
     after_failure:
-      - echo "Tests failed"
       - kubectl get all --all-namespaces
       - kubectl get events --all-namespaces --field-selector=type=Warning
-    services:
-      - docker
 
   # Base deploy job
   - &deploy
-    services:
-      - docker
+    env:
+      - IMAGE_REPO=quay.io/estroz
     before_install:
+      # hack/ci/check-doc-only-update.sh needs to be sourced so
+      # that it can properly exit the test early with success
+      - source hack/ci/check-doc-only-update.sh
       - git fetch origin --unshallow --tags
-    after_success:
-      - echo "Image build succeeded, and docker image tagged and pushed to repository"
-    after_failure:
-      - echo "Image build, docker image tagging, or docker image pushing to repository failed"
+    install:
+      # The latest version of docker-ce contains the buildx plugin, a requirement for multi-arch builds.
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - sudo apt-get update
+      - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
+      - test -n "$DOCKER_USERNAME" && echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin quay.io || true
 
 stages:
   - check
   - test
   - name: deploy
-    if: type != pull_request AND tag IS NOT present AND ( branch = master OR branch =~ /^v[0-9]+\.[0-9]+\.x$/ OR commit_message =~ /\[travis deploy\]/ )
+    if: tag IS present OR branch = master OR branch =~ /^v[0-9]+\.[0-9]+\.x$/ OR commit_message =~ /\[travis deploy\]/
+    # if: type != pull_request AND ( tag IS present OR branch = master OR branch =~ /^v[0-9]+\.[0-9]+\.x$/ OR commit_message =~ /\[travis deploy\]/ )
   - name: release
     if: type != pull_request AND tag IS present
 
@@ -101,8 +108,8 @@ jobs:
 
     # Build and test ansible and test ansible using molecule
     - stage: test
-      <<: *test
       name: Ansible on Kubernetes
+      <<: *test
       before_script:
         - pip3 install --upgrade setuptools pip
         - pip install --user ansible~=2.9.13
@@ -111,15 +118,15 @@ jobs:
         - make test-e2e-ansible-molecule
 
     # Test subcommands
-    - <<: *test
-      name: Subcommands and Integration on Kubernetes
+    - name: Subcommands and Integration on Kubernetes
+      <<: *test
       script:
       - make test-subcommand
       - make test-integration
 
     # Build and test go
-    - <<: *test
-      name: Go on Kubernetes
+    - name: Go on Kubernetes
+      <<: *test
       before_script:
       - (cd / && go get github.com/mattn/goveralls)
       script:
@@ -135,51 +142,28 @@ jobs:
 
     ## Image deploy/push stage jobs ##
     - stage: deploy
-      name: build
-      script: make -f release/Makefile snapshot
+      name: deploy operator-sdk
+      <<: *deploy
+      script: make -f release/Makefile image/operator-sdk IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG_SUFFIXES="$(test -n "$TRAVIS_TAG" && echo "latest $TRAVIS_TAG" || echo "$TRAVIS_BRANCH")"
 
-    - <<: *deploy
-      name: operator-sdk image
-      script: make -f images/Makefile image/operator-sdk IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
+    - name: deploy ansible-operator
+      <<: *deploy
+      script: make -f release/Makefile image/ansible-operator IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG_SUFFIXES="$(test -n "$TRAVIS_TAG" && echo "latest $TRAVIS_TAG" || echo "$TRAVIS_BRANCH")"
 
-    - <<: *deploy
-      name: helm-operator image
-      script: make -f images/Makefile image/helm-operator IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
+    - name: deploy helm-operator
+      <<: *deploy
+      script: make -f release/Makefile image/helm-operator IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG_SUFFIXES="$(test -n "$TRAVIS_TAG" && echo "latest $TRAVIS_TAG" || echo "$TRAVIS_BRANCH")"
 
-    - <<: *deploy
-      name: ansible-operator image
-      script: make -f images/Makefile image/ansible-operator IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
+    - name: deploy scorecard-test
+      <<: *deploy
+      script: make -f release/Makefile image/scorecard-test IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG_SUFFIXES="$(test -n "$TRAVIS_TAG" && echo "latest $TRAVIS_TAG" || echo "$TRAVIS_BRANCH")"
 
-    - <<: *deploy
-      name: scorecard-test image
-      script: make -f images/Makefile image/scorecard-test IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
-
-    - <<: *deploy
-      name: scorecard-test-kuttl image
-      script: make -f images/Makefile image/scorecard-test-kuttl IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
+    - name: deploy scorecard-test-kuttl
+      <<: *deploy
+      script: make -f release/Makefile image/scorecard-test-kuttl IMAGE_REPO="$IMAGE_REPO" IMAGE_TAG_SUFFIXES="$(test -n "$TRAVIS_TAG" && echo "latest $TRAVIS_TAG" || echo "$TRAVIS_BRANCH")"
 
     ## Release jobs ##
-    # TODO(estroz): write check for a pre-release commit so an accidental tag push doesn't trigger a release.
     - stage: release
-      name: release
-      script: make -f release/Makefile release TAG=$TRAVIS_TAG
-
-    - <<: *deploy
-      name: operator-sdk image
-      script: make -f release/Makefile image/operator-sdk TAG=$TRAVIS_TAG
-
-    - <<: *deploy
-      name: helm-operator image
-      script: make -f release/Makefile image/helm-operator TAG=$TRAVIS_TAG
-
-    - <<: *deploy
-      name: ansible-operator image
-      script: make -f release/Makefile image/ansible-operator TAG=$TRAVIS_TAG
-
-    - <<: *deploy
-      name: scorecard-test image
-      script: make -f release/Makefile image/scorecard-test TAG=$TRAVIS_TAG
-
-    - <<: *deploy
-      name: scorecard-test-kuttl image
-      script: make -f release/Makefile image/scorecard-test-kuttl TAG=$TRAVIS_TAG
+      name: publish release
+      before_install: git fetch origin --unshallow --tags
+      script: make -f release/Makefile release TAG="$TRAVIS_TAG"
