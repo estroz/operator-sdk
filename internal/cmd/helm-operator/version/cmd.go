@@ -35,10 +35,10 @@ func NewCmd() *cobra.Command {
 }
 
 func run() {
-	version := ver.GitVersion
+	version := ver.Version
 	if version == "unknown" {
-		version = ver.Version
+		version = ver.GitVersion
 	}
 	fmt.Printf("helm-operator version: %q, commit: %q, kubernetes version: %q, go version: %q, GOOS: %q, GOARCH: %q\n",
-		version, ver.GitCommit, ver.KubernetesVersion, ver.GoVersion, runtime.GOOS, runtime.GOARCH)
+		version, ver.GitCommit, ver.KubernetesVersion, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
