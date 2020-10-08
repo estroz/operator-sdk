@@ -9,51 +9,29 @@ else
   Q = @
 endif
 
-SIMPLE_VERSION=$(shell (test "$(shell git describe)" = "$(shell git describe --abbrev=0)" && echo $(shell git describe)) || echo $(shell git describe --abbrev=0)+git)
+export CGO_ENABLED := 0
+
 GIT_VERSION = $(shell git describe --dirty --tags --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
 K8S_VERSION = v1.18.2
-GOLANGCI_LINT_VER = "1.30.0"
-OLM_VERSION = "0.15.1"
+GOLANGCI_LINT_VER = 1.30.0
+OLM_VERSION = 0.15.1
 REPO = github.com/operator-framework/operator-sdk
+IMAGE_REPO ?= quay.io/operator-framework
 PKGS = $(shell go list ./... | grep -v /vendor/)
 TEST_PKGS = $(shell go list ./... | grep -v -E 'github.com/operator-framework/operator-sdk/test/')
 SOURCES = $(shell find . -name '*.go' -not -path "*/vendor/*")
+BUILDPLATFORM ?= $(shell go env GOOS)/$(shell go env GOARCH)
 # GO_BUILD_ARGS should be set when running 'go build' or 'go install'.
 GO_BUILD_ARGS = \
   -gcflags "all=-trimpath=$(shell go env GOPATH)" \
   -asmflags "all=-trimpath=$(shell go env GOPATH)" \
   -ldflags " \
-    -X '$(REPO)/internal/version.Version=$(SIMPLE_VERSION)' \
     -X '$(REPO)/internal/version.GitVersion=$(GIT_VERSION)' \
     -X '$(REPO)/internal/version.GitCommit=$(GIT_COMMIT)' \
-    -X '$(REPO)/internal/version.KubernetesVersion=$(K8S_VERSION)' \
   " \
 
-ANSIBLE_BASE_IMAGE = quay.io/operator-framework/ansible-operator
-HELM_BASE_IMAGE = quay.io/operator-framework/helm-operator
-OPERATOR_SDK_BASE_IMAGE = quay.io/operator-framework/operator-sdk
-CUSTOM_SCORECARD_TESTS_BASE_IMAGE = quay.io/operator-framework/custom-scorecard-tests
-SCORECARD_TEST_BASE_IMAGE = quay.io/operator-framework/scorecard-test
-SCORECARD_TEST_KUTTL_BASE_IMAGE = quay.io/operator-framework/scorecard-test-kuttl
-
-ANSIBLE_IMAGE ?= $(ANSIBLE_BASE_IMAGE)
-HELM_IMAGE ?= $(HELM_BASE_IMAGE)
-OPERATOR_SDK_IMAGE ?= $(OPERATOR_SDK_BASE_IMAGE)
-CUSTOM_SCORECARD_TESTS_IMAGE ?= $(CUSTOM_SCORECARD_TESTS_BASE_IMAGE)
-SCORECARD_TEST_IMAGE ?= $(SCORECARD_TEST_BASE_IMAGE)
-SCORECARD_TEST_KUTTL_IMAGE ?= $(SCORECARD_TEST_KUTTL_BASE_IMAGE)
-
-ANSIBLE_ARCHES:="amd64" "ppc64le" "arm64" "s390x"
-HELM_ARCHES:="amd64" "ppc64le" "arm64" "s390x"
-OPERATOR_SDK_ARCHES:="amd64" "ppc64le" "arm64" "s390x"
-SCORECARD_TEST_ARCHES:="amd64" "ppc64le" "arm64" "s390x"
-SCORECARD_TEST_KUTTL_ARCHES:="amd64" "ppc64le" "arm64"
-# the custom scorecard test image is a scorecard example only
-CUSTOM_SCORECARD_TESTS_ARCHES:="amd64" "ppc64le" "arm64"
-
-export CGO_ENABLED:=0
-.DEFAULT_GOAL:=help
+.DEFAULT_GOAL := help
 
 .PHONY: help
 help: ## Show this help screen
@@ -76,14 +54,8 @@ all: format test build/operator-sdk ## Test and Build the Operator SDK
 install: ## Install the binaries
 	$(Q)$(GOARGS) go install $(GO_BUILD_ARGS) ./cmd/operator-sdk ./cmd/ansible-operator ./cmd/helm-operator
 
-build/%: $(SOURCES) ## Build the operator-sdk binary
-	$(Q){ \
-	cmdpkg=$$(echo $* | sed -E "s/(operator-sdk|ansible-operator|helm-operator).*/\1/"); \
-	$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$$cmdpkg; \
-	}
-
 # Code management.
-.PHONY: format tidy clean cli-doc lint
+.PHONY: format tidy clean lint setup-k8s
 
 format: ## Format the source code
 	$(Q)go fmt $(PKGS)
@@ -95,14 +67,14 @@ clean: ## Clean up the build artifacts
 	$(Q)rm -rf build
 
 lint: ## Install and run golangci-lint checks
-ifneq (${GOLANGCI_LINT_VER}, "$(shell ./bin/golangci-lint --version 2>/dev/null | cut -b 27-32)")
-	@echo "golangci-lint missing or not version '${GOLANGCI_LINT_VER}', downloading..."
-	curl -sSfL "https://raw.githubusercontent.com/golangci/golangci-lint/v${GOLANGCI_LINT_VER}/install.sh" | sh -s -- -b ./bin "v${GOLANGCI_LINT_VER}"
+ifneq ($(GOLANGCI_LINT_VER), "$(shell ./bin/golangci-lint --version 2>/dev/null | cut -b 27-32)")
+	@echo "golangci-lint missing or not version '$(GOLANGCI_LINT_VER)', downloading..."
+	curl -sSfL "https://raw.githubusercontent.com/golangci/golangci-lint/v$(GOLANGCI_LINT_VER)/install.sh" | sh -s -- -b ./bin "v$(GOLANGCI_LINT_VER)"
 endif
 	./bin/golangci-lint --timeout 5m run
 
-setup-k8s:
-	hack/ci/setup-k8s.sh ${K8S_VERSION}
+setup-k8s: ## Set up a kind cluster locally
+	./hack/ci/setup-k8s.sh $(K8S_VERSION)
 
 ##############################
 # Generate Artifacts         #
@@ -120,59 +92,22 @@ cli-doc: ## Generate CLI documentation
 samples: ## Generate samples
 	go run ./hack/generate/samples/generate_all.go
 
-changelog: ## Generate CHANGELOG.md and migration guide updates
-	./hack/generate/changelog/gen-changelog.sh
-
-bindata:
+bindata: ## Generate bindata
 	./hack/generate/olm_bindata.sh $(OLM_VERSION)
 
-##############################
-# Release                    #
-##############################
-
-##@ Release
-
-# Build/install/release the SDK.
-.PHONY: release
-
-release: ## Release the Operator SDK
-	TAG=$(TAG) K8S_VERSION=$(K8S_VERSION) ./release.sh
+build/%: $(SOURCES) ## Build the operator-sdk binary
+	$(Q)$(GOARGS) go build $(GO_BUILD_ARGS) -o $@ ./cmd/$(patsubst build/,,$*)
 
 # TODO(estroz): inject GOMODCACHE into image builds as a volume to avoid re-pulling modules each build.
 
 # Image build.
-.PHONY: image
-image: image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk ## Build all images
-
-# Ansible operator image build.
-.PHONY: image-build-ansible
-image-build-ansible: build/ansible-operator
-	docker build -f ./images/ansible-operator/Dockerfile -t $(ANSIBLE_BASE_IMAGE):dev --build-arg BIN=build/ansible-operator .
-
-# Helm operator image build.
-.PHONY: image-build-helm
-image-build-helm: build/helm-operator
-	docker build -f ./images/helm-operator/Dockerfile -t $(HELM_BASE_IMAGE):dev --build-arg BIN=build/helm-operator .
-
-# operator-sdk binary image build.
-.PHONY: image-build-sdk
-image-build-sdk:
-	docker build -f ./images/operator-sdk/Dockerfile -t $(OPERATOR_SDK_BASE_IMAGE):dev .
-
-# Scorecard custom test image build.
-.PHONY: image-build-custom-scorecard-tests
-image-build-custom-scorecard-tests:
-	docker build -f ./images/custom-scorecard-tests/Dockerfile -t $(CUSTOM_SCORECARD_TESTS_BASE_IMAGE):dev .
-
-# Scorecard test image build.
-.PHONY: image-build-scorecard-test
-image-build-scorecard-test:
-	docker build -f ./images/scorecard-test/Dockerfile -t $(SCORECARD_TEST_BASE_IMAGE):dev .
-
-# Scorecard test kuttl image build.
-.PHONY: image-build-scorecard-test-kuttl
-image-build-scorecard-test-kuttl:
-	docker build -f ./images/scorecard-test-kuttl/Dockerfile -t $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev .
+image/%:
+ifeq ($(findstring scorecard,$*),)
+	$(MAKE) build/$*
+	docker build -f ./images/$*/Dockerfile -t $(IMAGE_REPO)/$*:dev --build-arg BIN=build/$* .
+else
+	docker build -f ./images/$*/Dockerfile -t $(IMAGE_REPO)/$*:dev --build-arg BUILDPLATFORM=$(BUILDPLATFORM) .
+endif
 
 ##############################
 # Tests                      #
@@ -212,16 +147,16 @@ test-subcommand-olm-install:
 
 test-e2e: test-e2e-go test-e2e-ansible test-e2e-ansible-molecule test-e2e-helm ## Run the e2e tests
 
-test-e2e-go: image-build-scorecard-test image-build-custom-scorecard-tests
+test-e2e-go: image/scorecard-test image/custom-scorecard-tests
 	./hack/tests/e2e-go.sh
 
-test-e2e-ansible: image-build-ansible image-build-scorecard-test
+test-e2e-ansible: image/ansible-operator image/scorecard-test
 	./hack/tests/e2e-ansible.sh
 
-test-e2e-ansible-molecule: image-build-ansible
+test-e2e-ansible-molecule: image/ansible-operator
 	./hack/tests/e2e-ansible-molecule.sh
 
-test-e2e-helm: image-build-helm image-build-scorecard-test
+test-e2e-helm: image/helm-operator image/scorecard-test
 	./hack/tests/e2e-helm.sh
 
 # Integration tests.

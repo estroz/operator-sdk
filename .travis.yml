@@ -1,14 +1,19 @@
 os: linux
-branches:
-  except:
-    - release-4.2
-    - release-4.3
-
-language: go
-go_import_path: github.com/operator-framework/operator-sdk
-
 # go modules require xenial for mercurial TLS 1.2 support
 dist: xenial
+
+# Install python3 and utilities dependencies
+addons:
+  apt:
+    packages:
+      - "python3"
+      - "python3-pip"
+      - docker-ce
+
+language: go
+go:
+- 1.15.x
+go_import_path: github.com/operator-framework/operator-sdk
 
 # Python 3.6 is the default Python when language: python.
 # But when not language: python, Python 3 can not be used by default.
@@ -18,19 +23,14 @@ env:
   global:
     - PATH=/opt/python/3.6.7/bin:$PATH
 
-# Install python3 and utilities dependencies
-addons:
-  apt:
-    packages:
-      - "python3"
-      - "python3-pip"
-
 cache:
   directories:
     - $HOME/.cache/go-build
 
-go:
-- 1.15.x
+branches:
+  except:
+    - release-4.2
+    - release-4.3
 
 # The `x_base_steps` top-level key is unknown to travis,
 # so we can use it to create a bunch of common build step
@@ -66,10 +66,6 @@ x_base_steps:
       - docker
     before_install:
       - git fetch origin --unshallow --tags
-      # TODO: remove the chmod command when docker-ce on travis is upgraded to 18.09.0+.
-      # We need /etc/docker to be accessible to non-root users.
-      # See https://github.com/moby/moby/pull/37847.
-      - sudo chmod 0755 /etc/docker
     after_success:
       - echo "Image build succeeded, and docker image tagged and pushed to repository"
     after_failure:
@@ -79,7 +75,7 @@ stages:
   - check
   - test
   - name: deploy
-    if: type != pull_request AND ( tag IS present OR branch = master OR branch =~ /^v[0-9]+\.[0-9]+\.x$/ OR commit_message =~ /\[travis deploy\]/ )
+    if: type != pull_request AND tag IS NOT present AND ( branch = master OR branch =~ /^v[0-9]+\.[0-9]+\.x$/ OR commit_message =~ /\[travis deploy\]/ )
   - name: release
     if: type != pull_request AND tag IS present
 
@@ -138,95 +134,52 @@ jobs:
       script: make test-e2e-helm
 
     ## Image deploy/push stage jobs ##
-
     - stage: deploy
-      <<: *deploy
+      name: build
+      script: make -f release/Makefile snapshot
+
+    - <<: *deploy
       name: operator-sdk image
-      env:
-        - TAGS=quay.io/operator-framework/operator-sdk:$TRAVIS_BRANCH
-      before_script:
-        - |-
-          if [[ -n "$TRAVIS_TAG" ]]; then
-            TAGS="$TAGS,quay.io/operator-framework/operator-sdk:$TRAVIS_TAG"
-            TAGS="$TAGS,quay.io/operator-framework/operator-sdk:latest"
-          fi
-      script:
-        - ./hack/image/build-image.sh \
-          --push \
-          --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
-          --dockerfile ./images/operator-sdk/Dockerfile \
-          --tags $TAGS
+      script: make -f images/Makefile image/operator-sdk IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
 
     - <<: *deploy
       name: helm-operator image
-      env:
-        - TAGS=quay.io/operator-framework/helm-operator:$TRAVIS_BRANCH
-      before_script:
-        - |-
-          if [[ -n "$TRAVIS_TAG" ]]; then
-            TAGS="$TAGS,quay.io/operator-framework/helm-operator:$TRAVIS_TAG"
-            TAGS="$TAGS,quay.io/operator-framework/helm-operator:latest"
-          fi
-      script:
-        - ./hack/image/build-image.sh \
-          --push \
-          --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
-          --dockerfile ./images/helm-operator/Dockerfile \
-          --tags $TAGS
+      script: make -f images/Makefile image/helm-operator IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
 
     - <<: *deploy
       name: ansible-operator image
-      env:
-        - TAGS=quay.io/operator-framework/ansible-operator:$TRAVIS_BRANCH
-      before_script:
-        - |-
-          if [[ -n "$TRAVIS_TAG" ]]; then
-            TAGS="$TAGS,quay.io/operator-framework/ansible-operator:$TRAVIS_TAG"
-            TAGS="$TAGS,quay.io/operator-framework/ansible-operator:latest"
-          fi
-      script:
-        - ./hack/image/build-image.sh \
-          --push \
-          --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
-          --dockerfile ./images/ansible-operator/Dockerfile \
-          --tags $TAGS
+      script: make -f images/Makefile image/ansible-operator IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
 
     - <<: *deploy
       name: scorecard-test image
-      env:
-        - TAGS=quay.io/operator-framework/scorecard-test:$TRAVIS_BRANCH
-      before_script:
-        - |-
-          if [[ -n "$TRAVIS_TAG" ]]; then
-            TAGS="$TAGS,quay.io/operator-framework/scorecard-test:$TRAVIS_TAG"
-            TAGS="$TAGS,quay.io/operator-framework/scorecard-test:latest"
-          fi
-      script:
-        - ./hack/image/build-image.sh \
-          --push \
-          --platforms linux/amd64,linux/arm64,linux/ppc64le,linux/s390x \
-          --dockerfile ./images/scorecard-test/Dockerfile \
-          --tags $TAGS
+      script: make -f images/Makefile image/scorecard-test IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
 
     - <<: *deploy
       name: scorecard-test-kuttl image
-      env:
-        - TAGS=quay.io/operator-framework/scorecard-test-kuttl:$TRAVIS_BRANCH
-      before_script:
-        - |-
-          if [[ -n "$TRAVIS_TAG" ]]; then
-            TAGS="$TAGS,quay.io/operator-framework/scorecard-test-kuttl:$TRAVIS_TAG"
-            TAGS="$TAGS,quay.io/operator-framework/scorecard-test-kuttl:latest"
-          fi
-      script:
-        - ./hack/image/build-image.sh \
-          --push \
-          --platforms linux/amd64,linux/arm64,linux/ppc64le \
-          --dockerfile ./images/scorecard-test-kuttl/Dockerfile \
-          --tags $TAGS
+      script: make -f images/Makefile image/scorecard-test-kuttl IMAGE_TAG_SUFFIX=$TRAVIS_BRANCH
 
+    ## Release jobs ##
     # TODO(estroz): write check for a pre-release commit so an accidental tag push doesn't trigger a release.
     - stage: release
       name: release
-      script:
-        - make release TAG=$TRAVIS_TAG
+      script: make -f release/Makefile release TAG=$TRAVIS_TAG
+
+    - <<: *deploy
+      name: operator-sdk image
+      script: make -f release/Makefile image/operator-sdk TAG=$TRAVIS_TAG
+
+    - <<: *deploy
+      name: helm-operator image
+      script: make -f release/Makefile image/helm-operator TAG=$TRAVIS_TAG
+
+    - <<: *deploy
+      name: ansible-operator image
+      script: make -f release/Makefile image/ansible-operator TAG=$TRAVIS_TAG
+
+    - <<: *deploy
+      name: scorecard-test image
+      script: make -f release/Makefile image/scorecard-test TAG=$TRAVIS_TAG
+
+    - <<: *deploy
+      name: scorecard-test-kuttl image
+      script: make -f release/Makefile image/scorecard-test-kuttl TAG=$TRAVIS_TAG

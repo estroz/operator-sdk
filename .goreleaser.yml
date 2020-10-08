@@ -7,10 +7,12 @@ builds:
     binary: operator-sdk
     env:
       - CGO_ENABLED=0
+      - GO111MODULE=on
+      - PWD=$(pwd)
     asmflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     gcflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     ldflags:
       - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
       - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
@@ -38,10 +40,12 @@ builds:
     binary: ansible-operator
     env:
       - CGO_ENABLED=0
+      - GO111MODULE=on
+      - PWD=$(pwd)
     asmflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     gcflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     ldflags:
       - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
       - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}
@@ -69,10 +73,12 @@ builds:
     binary: helm-operator
     env:
       - CGO_ENABLED=0
+      - GO111MODULE=on
+      - PWD=$(pwd)
     asmflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     gcflags:
-      - all=-trimpath={{ .Env.GOPATH }}
+      - all=-trimpath={{ dir .Env.PWD }}
     ldflags:
       - -X github.com/operator-framework/operator-sdk/internal/version.Version={{ .Version }}
       - -X github.com/operator-framework/operator-sdk/internal/version.GitVersion={{ .Version }}

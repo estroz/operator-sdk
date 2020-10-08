@@ -1,12 +1,18 @@
-FROM golang:1.15-alpine as builder
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM golang:1.15-alpine as builder
 
-ENV WD=/go/src
+ARG TARGETOS
+ARG TARGETARCH
+ENV GOOS=$TARGETOS
+ENV GOARCH=$TARGETARCH
+ENV GOPROXY="https://proxy.golang.org|direct"
+ENV CGO_ENABLED=0
+
+ENV WD=/app
 WORKDIR $WD
 COPY images/scorecard-test-kuttl .
 
-ENV CGO_ENABLED=0
-RUN go mod init scorecard-test-kuttl
-RUN GOPROXY="https://proxy.golang.org|direct" go mod download
+RUN go mod init scorecard-test-kuttl && go mod download
 RUN go build -o scorecard-test-kuttl -gcflags "all=-trimpath=${WD}" -asmflags "all=-trimpath=${WD}"
 
 # Base image
@@ -23,5 +29,5 @@ RUN echo "${USER_NAME}:x:${USER_UID}:0:${USER_NAME} user:${HOME}:/sbin/nologin" 
 WORKDIR ${HOME}
 USER ${USER_UID}
 
-COPY --from=builder /go/src/scorecard-test-kuttl /usr/local/bin/scorecard-test-kuttl
+COPY --from=builder /app/scorecard-test-kuttl /usr/local/bin/scorecard-test-kuttl
 ENTRYPOINT ["/usr/local/bin/scorecard-test-kuttl"]

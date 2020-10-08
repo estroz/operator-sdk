@@ -42,7 +42,7 @@ Follow these steps to execute the Travis `Deploy` stage against your branch
 to demonstrate that the merge build will complete as expected.
 
 - Enable Travis in your fork repository. See [this guide][travis-setup] for more information.
-- Create public image repos for each image built by `make image-build`; make sure the registry used supports
+- Create public image repos for each image in the `images/` directory; make sure the registry used supports
 multi-arch images, like quay.io.
   - For each image type, you need one repo for the manifest list and one for each architecture being tested.
 - Set each image variable (that ends in `_IMAGE`, not `_BASE_IMAGE`) found in the Makefile
