@@ -192,8 +192,9 @@ func printValidTests() (result scapiv1alpha3.TestStatus) {
 The SDK project makefile contains targets to build the sample custom test image.  The current makefile is found [here][sample_makefile].  You can use this makefile as a reference for your own custom test image makefile.
 
 To build the sample custom test image, run:
-```
-make image-build-custom-scorecard-tests
+
+```sh
+make image/custom-scorecard-tests
 ```
 
 ### Running scorecard command

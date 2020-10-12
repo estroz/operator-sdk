@@ -48,6 +48,11 @@ x_base_steps:
       - travis_retry make tidy
       - git fetch origin --unshallow --tags
     install:
+      # The latest version of docker-ce contains the buildx plugin, a requirement for multi-arch builds.
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - sudo apt-get update
+      - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
       - make install
       - make setup-k8s
       - export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
@@ -57,21 +62,23 @@ x_base_steps:
       - echo "Tests failed"
       - kubectl get all --all-namespaces
       - kubectl get events --all-namespaces --field-selector=type=Warning
-    services:
-      - docker
 
   # Base deploy job
   - &deploy
     before_install:
       - travis_retry make tidy
       - git fetch origin --unshallow --tags
-    install: make install
+    install:
+      # The latest version of docker-ce contains the buildx plugin, a requirement for multi-arch builds.
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      - sudo apt-get update
+      - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
+      - make install
     after_success:
       - echo "Image build succeeded, and docker image tagged and pushed to repository"
     after_failure:
       - echo "Image build, docker image tagging, or docker image pushing to repository failed"
-    services:
-      - docker
 
   # Manifest list deploy job
   - &manifest-deploy
@@ -158,7 +165,7 @@ jobs:
       name: Docker images for arm64
       arch: arm64
       script:
-        - make image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk
+        - make image-build-ansible image-build-helm image/scorecard-test image/scorecard-test-kuttl image-build-sdk
         - make image-push-ansible image-push-helm image-push-scorecard-test image-push-scorecard-test-kuttl image-push-sdk
 
     # Build and deploy amd64 docker images
@@ -166,7 +173,7 @@ jobs:
       name: Docker images for amd64
       arch: amd64
       script:
-        - make image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk
+        - make image-build-ansible image-build-helm image/scorecard-test image/scorecard-test-kuttl image-build-sdk
         - make image-push-ansible image-push-helm image-push-scorecard-test image-push-scorecard-test-kuttl image-push-sdk
 
     # Build and deploy ppc64le docker images
@@ -174,7 +181,7 @@ jobs:
       name: Docker images for ppc64le
       arch: ppc64le
       script:
-        - make image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk
+        - make image-build-ansible image-build-helm image/scorecard-test image/scorecard-test-kuttl image-build-sdk
         - make image-push-ansible image-push-helm image-push-scorecard-test image-push-scorecard-test-kuttl image-push-sdk
 
     # Build and deploy s390x docker images
@@ -182,7 +189,7 @@ jobs:
       name: Docker images for s390x
       arch: s390x
       script:
-        - make image-build-ansible image-build-helm image-build-scorecard-test image-build-sdk
+        - make image-build-ansible image-build-helm image/scorecard-test image-build-sdk
         - make image-push-ansible image-push-helm image-push-scorecard-test image-push-sdk
 
     # Build and deploy ansible multi-arch manifest list

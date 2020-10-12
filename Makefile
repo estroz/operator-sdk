@@ -30,6 +30,7 @@ GO_BUILD_ARGS = \
     -X '$(REPO)/internal/version.KubernetesVersion=$(K8S_VERSION)' \
   " \
 
+IMAGE_REPO ?= quay.io/operator-framework
 ANSIBLE_BASE_IMAGE = quay.io/operator-framework/ansible-operator
 HELM_BASE_IMAGE = quay.io/operator-framework/helm-operator
 OPERATOR_SDK_BASE_IMAGE = quay.io/operator-framework/operator-sdk
@@ -52,7 +53,10 @@ SCORECARD_TEST_KUTTL_ARCHES:="amd64" "ppc64le" "arm64"
 # the custom scorecard test image is a scorecard example only
 CUSTOM_SCORECARD_TESTS_ARCHES:="amd64" "ppc64le" "arm64"
 
-export CGO_ENABLED:=0
+export CGO_ENABLED := 0
+# Required for the docker buildx plugin.
+export DOCKER_CLI_EXPERIMENTAL := enabled
+
 .DEFAULT_GOAL:=help
 
 .PHONY: help
@@ -194,7 +198,7 @@ build/%.asc: ## Create release signatures for operator-sdk release binaries
 
 image: image-build image-push ## Build and push all images
 
-image-build: image-build-ansible image-build-helm image-build-scorecard-test image-build-scorecard-test-kuttl image-build-sdk ## Build all images
+image-build: image-build-ansible image-build-helm image/scorecard-test image/scorecard-test-kuttl image-build-sdk ## Build all images
 
 image-push: image-push-ansible image-push-helm image-push-scorecard-test image-push-scorecard-test-kuttl image-push-sdk ## Push all images
 
@@ -233,18 +237,16 @@ image-push-sdk:
 image-push-sdk-multiarch:
 	./hack/image/push-manifest-list.sh $(OPERATOR_SDK_IMAGE) ${OPERATOR_SDK_ARCHES}
 
+# Scorecard image builds are multi-stage so can be built directly.
+image/scorecard-test image/scorecard-test-kuttl image/custom-scorecard-tests:
+	docker buildx build --progress plain -f ./images/$(@F)/Dockerfile -t $(IMAGE_REPO)/$(@F):dev --load .
 
-# Scorecard custom test image build/push.
-.PHONY: image-build-custom-scorecard-tests
-
-image-build-custom-scorecard-tests:
-	./hack/image/build-custom-scorecard-tests-image.sh $(CUSTOM_SCORECARD_TESTS_BASE_IMAGE):dev
+# Build the image then load it if using a kind cluster. Meant for internal use.
+image-build-load/%: image/%
+	@[[ "$(shell kubectl config current-context)" = kind-kind ]] && command -v kind > /dev/null && kind load docker-image $(IMAGE_REPO)/$*:dev || true
 
 # Scorecard test image build/push.
-.PHONY: image-build-scorecard-test image-push-scorecard-test image-push-scorecard-test-multiarch
-
-image-build-scorecard-test:
-	./hack/image/build-scorecard-test-image.sh $(SCORECARD_TEST_BASE_IMAGE):dev
+.PHONY: image-push-scorecard-test image-push-scorecard-test-multiarch
 
 image-push-scorecard-test:
 	./hack/image/push-image-tags.sh $(SCORECARD_TEST_BASE_IMAGE):dev $(SCORECARD_TEST_IMAGE)-$(shell go env GOARCH)
@@ -253,10 +255,7 @@ image-push-scorecard-test-multiarch:
 	./hack/image/push-manifest-list.sh $(SCORECARD_TEST_IMAGE) ${SCORECARD_TEST_ARCHES}
 
 # Scorecard test kuttl image build/push.
-.PHONY: image-build-scorecard-test-kuttl image-push-scorecard-test-kuttl image-push-scorecard-test-kuttl-multiarch
-
-image-build-scorecard-test-kuttl:
-	./hack/image/build-scorecard-test-kuttl-image.sh $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev
+.PHONY: image-push-scorecard-test-kuttl image-push-scorecard-test-kuttl-multiarch
 
 image-push-scorecard-test-kuttl:
 	./hack/image/push-image-tags.sh $(SCORECARD_TEST_KUTTL_BASE_IMAGE):dev $(SCORECARD_TEST_KUTTL_IMAGE)-$(shell go env GOARCH)
@@ -302,16 +301,16 @@ test-subcommand-olm-install:
 
 test-e2e: test-e2e-go test-e2e-ansible test-e2e-ansible-molecule test-e2e-helm ## Run the e2e tests
 
-test-e2e-go: image-build-scorecard-test image-build-custom-scorecard-tests
+test-e2e-go: image-build-load/scorecard-test image-build-load/custom-scorecard-tests
 	./hack/tests/e2e-go.sh
 
-test-e2e-ansible: image-build-ansible image-build-scorecard-test
+test-e2e-ansible: image-build-ansible image-build-load/scorecard-test
 	./hack/tests/e2e-ansible.sh
 
 test-e2e-ansible-molecule: image-build-ansible
 	./hack/tests/e2e-ansible-molecule.sh
 
-test-e2e-helm: image-build-helm image-build-scorecard-test
+test-e2e-helm: image-build-helm image-build-load/scorecard-test
 	./hack/tests/e2e-helm.sh
 
 # Integration tests.
