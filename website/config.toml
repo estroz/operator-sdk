@@ -94,6 +94,8 @@ algolia_docsearch = false
   version = "Latest Release"
   url = "https://sdk.operatorframework.io"
 
+##RELEASE_ADDME##
+
 [[params.versions]]
   version = "v1.1"
   url = "https://v1-1-x.sdk.operatorframework.io"
@@ -157,7 +159,7 @@ no = 'Sorry to hear that. Please <a href="https://github.com/operator-framework/
 	name = "github"
 	url = "https://github.com/operator-framework/operator-sdk"
 	icon = "fab fa-github"
-	
+
 #[[params.links.social]]
 #	name = "slack"
 #	url = "https://example.org/mail"

@@ -6,6 +6,10 @@
 /dist
 /tools/bin
 /images/*/bin
+/changelog/generated
+
+# CI GPG keyring
+/.ci/gpg/keyring
 
 # Website
 website/public/

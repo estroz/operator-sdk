@@ -34,6 +34,12 @@ fetch() {
       ver_cmd="cat ${DEST}/.envtest_version 2>/dev/null"
       fetch_cmd="(test -f ${DEST}/setup-envtest.sh || curl -sSLo ${DEST}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v${ver}/hack/setup-envtest.sh) && (source ${DEST}/setup-envtest.sh; fetch_envtest_tools ${DEST}/../) && echo ${ver} > ${DEST}/.envtest_version"
       ;;
+    "goreleaser")
+      [[ -z "$ver" ]] || (echo "cannot set goreleaser version" && exit 1)
+      ver="${DEST}/goreleaser"
+      ver_cmd="command -v ${DEST}/goreleaser"
+      fetch_cmd="curl -sfL https://install.goreleaser.com/github.com/goreleaser/goreleaser.sh | sh -s -- -b ${DEST}"
+      ;;
     *)
       echo "unknown tool $tool"
       return 1
