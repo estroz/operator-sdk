@@ -78,6 +78,20 @@ type getBaseFunc func() (*operatorsv1alpha1.ClusterServiceVersion, error)
 // Option is a function that modifies a Generator.
 type Option func(*Generator) error
 
+// WithBaseCreator creates a Generator's base CSV to a kustomize-style base.
+func WithBaseCreator(cfg *config.Config, inputDir, apisDir string, ilvl projutil.InteractiveLevel) Option {
+	return func(g *Generator) error {
+		//g.getBase = g.makeKustomizeBaseGetter(inputDir, apisDir, ilvl)
+		basePath := filepath.Join(inputDir, "bases", makeCSVFileName(g.OperatorName))
+		if genutil.IsNotExist(basePath) {
+			basePath = ""
+		}
+
+		g.getBase = g.makeBaseCreator(cfg, basePath, apisDir, requiresInteraction(basePath, ilvl))
+		return nil
+	}
+}
+
 // WithBase sets a Generator's base CSV to a kustomize-style base.
 func WithBase(inputDir, apisDir string, ilvl projutil.InteractiveLevel) Option {
 	return func(g *Generator) error {
@@ -143,8 +157,41 @@ func WithPackageWriter(dir string) Option {
 	}
 }
 
-// Generate configures the generator with cfg and opts then runs it.
-func (g *Generator) Generate(cfg *config.Config, opts ...Option) (err error) {
+// Generate configures the generator with col and opts then runs it.
+func (g *Generator) Generate(opts ...Option) (err error) {
+	g.config, err = projutil.ReadConfig()
+	if err == nil {
+		fmt.Printf("config %+v\n", g.config)
+	}
+	for _, opt := range opts {
+		if err = opt(g); err != nil {
+			return err
+		}
+	}
+
+	if g.getWriter == nil {
+		return noGetWriterError
+	}
+
+	csv, err := g.generate()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\ncsv after g.generate()\n%+v\n", csv)
+
+	// Add sdk labels to csv
+	g.setSDKAnnotations(csv)
+
+	w, err := g.getWriter()
+	if err != nil {
+		return err
+	}
+	return genutil.WriteObject(w, csv)
+}
+
+/*
+// GenerateWithConfig configures the generator with cfg and opts then runs it.
+func (g *Generator) GenerateWithConfig(cfg *config.Config, opts ...Option) (err error) {
 	g.config = cfg
 	for _, opt := range opts {
 		if err = opt(g); err != nil {
@@ -170,6 +217,7 @@ func (g *Generator) Generate(cfg *config.Config, opts ...Option) (err error) {
 	}
 	return genutil.WriteObject(w, csv)
 }
+*/
 
 // setSDKAnnotations adds SDK metric labels to the base if they do not exist.
 func (g Generator) setSDKAnnotations(csv *v1alpha1.ClusterServiceVersion) {
@@ -190,10 +238,15 @@ func (g *Generator) generate() (*operatorsv1alpha1.ClusterServiceVersion, error)
 		return nil, noGetBaseError
 	}
 
+	//fmt.Printf("\n\ngetBase:  %T", g.getBase)
+	//fmt.Printf("\n\ncol:  %+v\n", col)
+
 	base, err := g.getBase()
 	if err != nil {
 		return nil, fmt.Errorf("error getting ClusterServiceVersion base: %v", err)
 	}
+
+	fmt.Printf("\nbase after g.getBase\n%+v\n", base)
 
 	if err = g.updateVersions(base); err != nil {
 		return nil, err
@@ -223,14 +276,54 @@ func (g Generator) makeKustomizeBaseGetter(inputDir, apisDir string, ilvl projut
 	return g.makeBaseGetter(basePath, apisDir, requiresInteraction(basePath, ilvl))
 }
 
+func (g Generator) makeBaseCreator(cfg *config.Config, basePath, apisDir string, interactive bool) getBaseFunc {
+	gvks := make([]schema.GroupVersionKind, len(cfg.Resources))
+	for i, gvk := range cfg.Resources {
+		gvks[i].Group = fmt.Sprintf("%s.%s", gvk.Group, cfg.Domain)
+		gvks[i].Version = gvk.Version
+		gvks[i].Kind = gvk.Kind
+		//fmt.Printf("\n\nGVK's in cfg: \n\n%+v\n\n", gvk)
+	}
+	return func() (*operatorsv1alpha1.ClusterServiceVersion, error) {
+		b := bases.ClusterServiceVersion{
+			OperatorName: g.OperatorName,
+			OperatorType: g.OperatorType,
+			BasePath:     basePath,
+			APIsDir:      apisDir,
+			GVKs:         gvks,
+			Interactive:  interactive,
+		}
+		return b.GetBase()
+	}
+}
+
 // makeBaseGetter returns a function that gets a base from inputDir.
 // apisDir is used by getBaseFunc to populate base fields.
 func (g Generator) makeBaseGetter(basePath, apisDir string, interactive bool) getBaseFunc {
-	gvks := make([]schema.GroupVersionKind, len(g.config.Resources))
-	for i, gvk := range g.config.Resources {
-		gvks[i].Group = fmt.Sprintf("%s.%s", gvk.Group, g.config.Domain)
-		gvks[i].Version = gvk.Version
-		gvks[i].Kind = gvk.Kind
+	var gvks []schema.GroupVersionKind
+	if g.Collector != nil {
+		if g.Collector.V1CustomResourceDefinitions != nil {
+			for _, crd := range g.Collector.V1CustomResourceDefinitions {
+				for _, version := range crd.Spec.Versions {
+					gvks = append(gvks, schema.GroupVersionKind{
+						Group:   crd.Spec.Group,
+						Version: version.Name,
+						Kind:    crd.Spec.Names.Kind,
+					})
+				}
+			}
+		}
+		if g.Collector.V1beta1CustomResourceDefinitions != nil {
+			for _, crd := range g.Collector.V1beta1CustomResourceDefinitions {
+				for _, version := range crd.Spec.Versions {
+					gvks = append(gvks, schema.GroupVersionKind{
+						Group:   crd.Spec.Group,
+						Version: version.Name,
+						Kind:    crd.Spec.Names.Kind,
+					})
+				}
+			}
+		}
 	}
 
 	return func() (*operatorsv1alpha1.ClusterServiceVersion, error) {
