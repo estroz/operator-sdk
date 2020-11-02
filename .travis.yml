@@ -123,7 +123,7 @@ jobs:
       <<: *deploy
       script:
         - make image-build
-        - make -f release/Makefile image-push
+        - IMAGE_REPO=quay.io/estroz make -f release/Makefile image-push
 
     # Build and deploy amd64 docker images
     - name: build and push images
@@ -131,7 +131,7 @@ jobs:
       <<: *deploy
       script:
         - make image-build
-        - make -f release/Makefile image-push
+        - IMAGE_REPO=quay.io/estroz make -f release/Makefile image-push
 
     # Build and deploy ppc64le docker images
     - name: build and push images
@@ -139,7 +139,7 @@ jobs:
       <<: *deploy
       script:
         - make image-build
-        - make -f release/Makefile image-push
+        - IMAGE_REPO=quay.io/estroz make -f release/Makefile image-push
 
     # Build and deploy s390x docker images
     - name: build and push images
@@ -148,13 +148,13 @@ jobs:
       script:
         # Use targets directly since kuttl doesn't support s390x.
         - make image/ansible-operator image/helm-operator image/operator-sdk image/scorecard-test
-        - make -f release/Makefile image-push/ansible-operator image-push/helm-operator image-push/operator-sdk image-push/scorecard-test
+        - IMAGE_REPO=quay.io/estroz make -f release/Makefile image-push/ansible-operator image-push/helm-operator image-push/operator-sdk image-push/scorecard-test
 
     # Build and deploy ansible multi-arch manifest list
     - stage: deploy-manifest-multiarch
       name: push manifest lists
       <<: *manifest-deploy
-      script: make -f release/Makefile image-push-multiarch
+      script: IMAGE_REPO=quay.io/estroz make -f release/Makefile image-push-multiarch
 
     ## Release jobs ##
 

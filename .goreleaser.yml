@@ -84,7 +84,7 @@ changelog:
 #     - operator-sdk
 
 # Uncomment for testing
-# release:
-#   github:
-#     owner: <your-github-namespace>
-#     name: operator-sdk
+release:
+  github:
+    owner: estroz
+    name: operator-sdk
