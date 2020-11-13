@@ -189,36 +189,6 @@ func (g *Generator) Generate(opts ...Option) (err error) {
 	return genutil.WriteObject(w, csv)
 }
 
-/*
-// GenerateWithConfig configures the generator with cfg and opts then runs it.
-func (g *Generator) GenerateWithConfig(cfg *config.Config, opts ...Option) (err error) {
-	g.config = cfg
-	for _, opt := range opts {
-		if err = opt(g); err != nil {
-			return err
-		}
-	}
-
-	if g.getWriter == nil {
-		return noGetWriterError
-	}
-
-	csv, err := g.generate()
-	if err != nil {
-		return err
-	}
-
-	// Add sdk labels to csv
-	g.setSDKAnnotations(csv)
-
-	w, err := g.getWriter()
-	if err != nil {
-		return err
-	}
-	return genutil.WriteObject(w, csv)
-}
-*/
-
 // setSDKAnnotations adds SDK metric labels to the base if they do not exist.
 func (g Generator) setSDKAnnotations(csv *v1alpha1.ClusterServiceVersion) {
 	annotations := csv.GetAnnotations()
@@ -238,15 +208,10 @@ func (g *Generator) generate() (*operatorsv1alpha1.ClusterServiceVersion, error)
 		return nil, noGetBaseError
 	}
 
-	//fmt.Printf("\n\ngetBase:  %T", g.getBase)
-	//fmt.Printf("\n\ncol:  %+v\n", col)
-
 	base, err := g.getBase()
 	if err != nil {
 		return nil, fmt.Errorf("error getting ClusterServiceVersion base: %v", err)
 	}
-
-	fmt.Printf("\nbase after g.getBase\n%+v\n", base)
 
 	if err = g.updateVersions(base); err != nil {
 		return nil, err
@@ -282,7 +247,6 @@ func (g Generator) makeBaseCreator(cfg *config.Config, basePath, apisDir string,
 		gvks[i].Group = fmt.Sprintf("%s.%s", gvk.Group, cfg.Domain)
 		gvks[i].Version = gvk.Version
 		gvks[i].Kind = gvk.Kind
-		//fmt.Printf("\n\nGVK's in cfg: \n\n%+v\n\n", gvk)
 	}
 	return func() (*operatorsv1alpha1.ClusterServiceVersion, error) {
 		b := bases.ClusterServiceVersion{

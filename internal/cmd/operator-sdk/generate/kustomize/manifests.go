@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/kubebuilder/v2/pkg/model/config"
 
 	genutil "github.com/operator-framework/operator-sdk/internal/cmd/operator-sdk/generate/internal"
-	//gencsv "github.com/operator-framework/operator-sdk/internal/generate/clusterserviceversion"
 	gencsv "github.com/operator-framework/operator-sdk/internal/generate/clusterserviceversion"
 	"github.com/operator-framework/operator-sdk/internal/plugins/util/kustomize"
 	"github.com/operator-framework/operator-sdk/internal/util/projutil"
@@ -176,7 +175,6 @@ func (c manifestsCmd) run(cfg *config.Config) error {
 	opts := []gencsv.Option{
 		gencsv.WithBaseCreator(cfg, c.inputDir, c.apisDir, c.interactiveLevel),
 		gencsv.WithBaseWriter(c.outputDir),
-		//gencsv.WithBaseCreator(c.outputDir),
 	}
 	if err := csvGen.Generate(opts...); err != nil {
 		return fmt.Errorf("error generating kustomize bases: %v", err)

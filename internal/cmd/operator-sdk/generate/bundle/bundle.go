@@ -174,8 +174,6 @@ func (c bundleCmd) runManifests() (err error) {
 		}
 	}
 
-	fmt.Printf("col: \n\n%+v\n\n", col)
-
 	operatorType := ""
 	cfg, err := projutil.ReadConfig()
 	if err == nil {

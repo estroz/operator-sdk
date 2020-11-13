@@ -66,16 +66,6 @@ func NewCmd() *cobra.Command {
 				c.metadata = true
 			}
 
-			/*cfg, err := projutil.ReadConfig()
-			if err != nil {
-				//start creating cfg here?
-				log.Warnf("no configuration found: %v", err)
-				cfg, err = projutil.UpdateConfigFromDir(c.crdsDir)
-				if err != nil {
-					return fmt.Errorf("error creating configuration: %v", err)
-				}
-			}*/
-
 			if err := c.setDefaults(); err != nil {
 				return err
 			}

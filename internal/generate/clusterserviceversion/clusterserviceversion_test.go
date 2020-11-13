@@ -103,7 +103,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 			BeforeEach(func() {
 				tmp, err = ioutil.TempDir(".", "")
 				Expect(err).ToNot(HaveOccurred())
-				fmt.Printf("\n\n\ntest case\n\n\n")
 			})
 
 			AfterEach(func() {
@@ -113,7 +112,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 			})
 
 			It("should write a ClusterServiceVersion manifest to an io.Writer", func() {
-				fmt.Printf("\n\n\ntest case: should write a ClusterServiceVersion manifest to an io.Writer\n\n\n")
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
@@ -129,12 +127,9 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 				Expect(outputCSV).To(MatchYAML(newCSVStr))
 			})
 			It("should write a ClusterServiceVersion manifest to a base file", func() {
-				fmt.Printf("\n\n\ntest case: should write a ClusterServiceVersion manifest to a base file\n\n\n")
-				//fmt.Printf("\n\ncol.man:\n%#v", col)
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
-					//Collector:    col,
 				}
 				opts := []Option{
 					WithBaseCreator(cfg, csvBasesDir, goAPIsDir, projutil.InteractiveHardOff),
@@ -146,7 +141,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 				Expect(readFileHelper(outputFile)).To(MatchYAML(baseCSVUIMetaStr))
 			})
 			It("should have sdk labels in annotations", func() {
-				fmt.Printf("\n\n\ntest case: should have sdk labels in annotations\n\n\n")
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
@@ -167,7 +161,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 				Expect(annotations).Should(HaveKey(metricsannotations.LayoutObjectAnnotation))
 			})
 			It("should have sdk labels in annotations when generating with config", func() {
-				fmt.Printf("\n\n\ntest case: should have sdk labels in annotations\n\n\n")
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
@@ -188,7 +181,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 				Expect(annotations).Should(HaveKey(metricsannotations.LayoutObjectAnnotation))
 			})
 			It("should write a ClusterServiceVersion manifest to a bundle file", func() {
-				fmt.Printf("\n\n\ntest case: hould write a ClusterServiceVersion manifest to a bundle file\n\n\n")
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
@@ -205,7 +197,6 @@ var _ = Describe("Generating a ClusterServiceVersion", func() {
 				Expect(readFileHelper(outputFile)).To(MatchYAML(newCSVStr))
 			})
 			It("should write a ClusterServiceVersion manifest to a package file", func() {
-				fmt.Printf("\n\n\ntest case: should write a ClusterServiceVersion manifest to a package file\n\n\n")
 				g = Generator{
 					OperatorName: operatorName,
 					OperatorType: operatorType,
@@ -487,8 +478,6 @@ func removeSDKAnnotationsFromCSVString(csv string) string {
 
 	csv = builderRe.ReplaceAllString(csv, "")
 	csv = layoutRe.ReplaceAllString(csv, "")
-
-	//fmt.Printf("\n\ncsv: %+v\n\n", csv)
 
 	return csv
 }
