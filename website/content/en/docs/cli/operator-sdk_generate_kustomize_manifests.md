@@ -52,6 +52,7 @@ operator-sdk generate kustomize manifests [flags]
       --input-dir string    Directory containing existing kustomize files
       --interactive         When set or no kustomize base exists, an interactive command prompt will be presented to accept non-inferrable metadata
       --output-dir string   Directory to write kustomize files
+      --package string      Package name
   -q, --quiet               Run in quiet mode
 ```
 
