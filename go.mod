@@ -9,7 +9,7 @@ require (
 	github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334
 	github.com/kr/text v0.1.0
 	github.com/markbates/inflect v1.0.4
-	github.com/onsi/ginkgo v1.12.1
+	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/operator-framework/api v0.3.20
 	github.com/operator-framework/operator-lib v0.1.0
