@@ -167,7 +167,7 @@ func (g *Generator) generate() (base *operatorsv1alpha1.ClusterServiceVersion, e
 	} else if oldBase != nil {
 		// Only update versions in the old way to preserve existing behavior.
 		base = oldBase
-		if err := g.updateVersions(base); err != nil {
+		if err := g.updateVersionsWithReplaces(base); err != nil {
 			return nil, err
 		}
 	} else if g.Version != "" {
@@ -196,10 +196,10 @@ func requiresInteraction(basePath string, ilvl projutil.InteractiveLevel) bool {
 	return (ilvl == projutil.InteractiveSoftOff && genutil.IsNotExist(basePath)) || ilvl == projutil.InteractiveOnAll
 }
 
-// updateVersions updates csv's version and data involving the version,
+// updateVersionsWithReplaces updates csv's version and data involving the version,
 // ex. ObjectMeta.Name, and place the old version in the `replaces` object,
 // if there is an old version to replace.
-func (g Generator) updateVersions(csv *operatorsv1alpha1.ClusterServiceVersion) (err error) {
+func (g Generator) updateVersionsWithReplaces(csv *operatorsv1alpha1.ClusterServiceVersion) (err error) {
 
 	oldVer, newVer := csv.Spec.Version.String(), g.Version
 	newName := genutil.MakeCSVName(g.OperatorName, newVer)

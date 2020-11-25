@@ -144,7 +144,7 @@ func (b ClusterServiceVersion) makeNewBase() *v1alpha1.ClusterServiceVersion {
 			Kind:       v1alpha1.ClusterServiceVersionKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      b.OperatorName + ".vX.Y.Z",
+			Name:      b.OperatorName + ".v0.0.0",
 			Namespace: "placeholder",
 			Annotations: map[string]string{
 				"capabilities": b.Capabilities,
