@@ -2,7 +2,7 @@
 
 Operator SDK is Apache 2.0 licensed and accepts contributions via GitHub pull requests. This document outlines some of the conventions on commit message formatting, contact points for developers, and other resources to help get contributions into operator-sdk.
 
-# Email and Chat
+# Email and Chatd
 
 - Email: [operator-framework][operator_framework]  
 
