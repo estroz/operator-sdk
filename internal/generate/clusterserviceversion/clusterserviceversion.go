@@ -54,6 +54,8 @@ type Generator struct {
 	Collector *collector.Manifests
 	// Annotations are applied to the resulting CSV.
 	Annotations map[string]string
+	// Updaters update a CSV using externally-defined data.
+	Updaters []Updater
 
 	// Func that returns the writer the generated CSV's bytes are written to.
 	getWriter func() (io.Writer, error)
@@ -180,6 +182,12 @@ func (g *Generator) generate() (base *operatorsv1alpha1.ClusterServiceVersion, e
 
 	if err := ApplyTo(g.Collector, base); err != nil {
 		return nil, err
+	}
+
+	for _, u := range g.Updaters {
+		if err := u.Update(base); err != nil {
+			return nil, fmt.Errorf("error updating CSV %q: %v", base.GetName(), err)
+		}
 	}
 
 	return base, nil

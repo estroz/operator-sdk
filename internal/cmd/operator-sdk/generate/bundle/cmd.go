@@ -21,6 +21,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/operator-framework/operator-sdk/internal/flags"
 )
 
 //nolint:maligned
@@ -38,6 +40,7 @@ type bundleCmd struct {
 	crdsDir      string
 	stdout       bool
 	quiet        bool
+	resolveTypes flags.ResolveTypes
 
 	// Metadata options.
 	channels       string
@@ -115,6 +118,7 @@ func (c *bundleCmd) addFlagsTo(fs *pflag.FlagSet) {
 	fs.BoolVar(&c.manifests, "manifests", false, "Generate bundle manifests")
 	fs.BoolVar(&c.metadata, "metadata", false, "Generate bundle metadata and Dockerfile")
 
+	fs.StringVar(&c.packageName, "package", "", "Bundle's package name")
 	fs.StringVarP(&c.version, "version", "v", "", "Semantic version of the operator in the generated bundle. "+
 		"Only set if creating a new bundle or upgrading your operator")
 	fs.StringVar(&c.inputDir, "input-dir", "", "Directory to read an existing bundle from. "+
@@ -127,6 +131,5 @@ func (c *bundleCmd) addFlagsTo(fs *pflag.FlagSet) {
 	fs.StringVar(&c.defaultChannel, "default-channel", "", "The default channel for the bundle")
 	fs.BoolVar(&c.overwrite, "overwrite", true, "Overwrite the bundle's metadata and Dockerfile if they exist")
 	fs.BoolVarP(&c.quiet, "quiet", "q", false, "Run in quiet mode")
-
-	fs.StringVar(&c.packageName, "package", "", "Bundle's package name")
+	fs.Var(&c.resolveTypes, "resolve-types", c.resolveTypes.Description())
 }

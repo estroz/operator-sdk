@@ -209,6 +209,7 @@ func (c bundleCmd) runManifests() (err error) {
 		Version:      c.version,
 		Collector:    col,
 		Annotations:  metricsannotations.MakeBundleObjectAnnotations(c.layout),
+		Updaters:     []gencsv.Updater{c.resolveTypes},
 	}
 	if err := csvGen.Generate(opts...); err != nil {
 		return fmt.Errorf("error generating ClusterServiceVersion: %v", err)

@@ -21,6 +21,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/operator-framework/operator-sdk/internal/flags"
 )
 
 //nolint:maligned
@@ -36,6 +38,7 @@ type packagemanifestsCmd struct {
 	updateObjects bool
 	stdout        bool
 	quiet         bool
+	resolveTypes  flags.ResolveTypes
 
 	// Package manifest options.
 	channelName      string
@@ -81,6 +84,7 @@ func NewCmd() *cobra.Command {
 }
 
 func (c *packagemanifestsCmd) addFlagsTo(fs *pflag.FlagSet) {
+	fs.StringVar(&c.packageName, "package", "", "Package name")
 	fs.StringVarP(&c.version, "version", "v", "", "Semantic version of the packaged operator")
 	fs.StringVar(&c.fromVersion, "from-version", "", "Semantic version of the operator being upgraded from")
 	fs.StringVar(&c.inputDir, "input-dir", "", "Directory to read existing package manifests from. "+
@@ -98,6 +102,5 @@ func (c *packagemanifestsCmd) addFlagsTo(fs *pflag.FlagSet) {
 		"ex. CustomResoureDefinitions, Roles")
 	fs.BoolVarP(&c.quiet, "quiet", "q", false, "Run in quiet mode")
 	fs.BoolVar(&c.stdout, "stdout", false, "Write package to stdout")
-
-	fs.StringVar(&c.packageName, "package", "", "Package name")
+	fs.Var(&c.resolveTypes, "resolve-types", c.resolveTypes.Description())
 }
