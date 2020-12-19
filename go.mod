@@ -44,4 +44,4 @@ replace (
 	golang.org/x/text => golang.org/x/text v0.3.3 // Required to fix CVE-2020-14040
 )
 
-exclude github.com/spf13/viper v1.3.2 // Required to fix CVE-2018-1098
+exclude github.com/spf13/viper v1.3.2 // Required to fix CVE-2018-10982
