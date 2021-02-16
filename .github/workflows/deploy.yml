@@ -1,0 +1,163 @@
+name: deploy
+
+on:
+  push:
+    branches:
+    - '**'
+    tags:
+    - 'v*'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    environment: deploy
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: install
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15.5
+
+    - name: release
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          export DRY_RUN=1
+        fi
+        .ci/gpg/create-keyring.sh
+        make release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
+
+  docker:
+    name: docker
+    runs-on: ubuntu-latest
+    environment: deploy
+    steps:
+    - name: prepare
+      id: prep
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+          MAJOR_MINOR=${TAG%.*}
+          echo ::set-output name=tags::${TAG},${MAJOR_MINOR}
+
+        elif [[ $GITHUB_REF == refs/heads/* ]]; then
+          TAG=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
+          if [ "${{ github.event.repository.default_branch }}" = "$TAG" ]; then
+            TAG=edge
+          fi
+          echo ::set-output name=tags::${TAG}
+
+        elif [[ $GITHUB_REF == refs/pull/* ]]; then
+          TAG=pr-${{ github.event.number }}
+          echo ::set-output name=tags::${TAG}
+        fi
+
+    - name: setup buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: login
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_PASSWORD }}
+        registry: quay.io
+
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+  operator-sdk:
+    needs: docker
+    steps:
+    - name: prepare
+      id: prep
+      run: |
+        TAGS=$(echo ${{ needs.docker.prep.outputs.tags }} | sed -E 's|([^,]+)(,)?|quay.io/operator-framework/operator-sdk:\1 |g')
+        echo ::set-output name=tags::${TAGS}
+    - name: operator-sdk image
+      uses: docker/build-push-action@v2
+      with:
+        file: ./images/operator-sdk/Dockerfile
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ (github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+        tags: ${{ steps.tags.outputs.tags }}
+
+  helm-operator:
+    needs: docker
+    steps:
+    - name: tags
+      id: tags
+      run: |
+        TAGS=$(echo ${{ needs.docker.prep.outputs.tags }} | sed -E 's|([^,]+)(,)?|quay.io/operator-framework/helm-operator:\1 |g')
+        echo ::set-output name=tags::${TAGS}
+    - name: helm-operator image
+      uses: docker/build-push-action@v2
+      with:
+        file: ./images/helm-operator/Dockerfile
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ (github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+        tags: ${{ steps.tags.outputs.tags }}
+
+  ansible-operator:
+    needs: docker
+    steps:
+    - name: tags
+      id: tags
+      run: |
+        TAGS=$(echo ${{ needs.docker.prep.outputs.tags }} | sed -E 's|([^,]+)(,)?|quay.io/operator-framework/ansible-operator:\1 |g')
+        echo ::set-output name=tags::${TAGS}
+    - name: ansible-operator image
+      uses: docker/build-push-action@v2
+      with:
+        file: ./images/ansible-operator/Dockerfile
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ (github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+        tags: ${{ steps.tags.outputs.tags }}
+
+  scorecard-test:
+    needs: docker
+    steps:
+    - name: tags
+      id: tags
+      run: |
+        TAGS=$(echo ${{ needs.docker.prep.outputs.tags }} | sed -E 's|([^,]+)(,)?|quay.io/operator-framework/scorecard-test:\1 |g')
+        echo ::set-output name=tags::${TAGS}
+    - name: scorecard-test image
+      uses: docker/build-push-action@v2
+      with:
+        file: ./images/scorecard-test/Dockerfile
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ (github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+        tags: ${{ steps.tags.outputs.tags }}
+
+  scorecard-test-kuttl:
+    needs: docker
+    steps:
+    - name: tags
+      id: tags
+      run: |
+        TAGS=$(echo ${{ needs.docker.prep.outputs.tags }} | sed -E 's|([^,]+)(,)?|quay.io/operator-framework/scorecard-test-kuttl:\1 |g')
+        echo ::set-output name=tags::${TAGS}
+    - name: scorecard-test-kuttl image
+      uses: docker/build-push-action@v2
+      with:
+        file: ./images/scorecard-test-kuttl/Dockerfile
+        context: .
+        platforms: linux/amd64,linux/arm64,linux/ppc64le # s390x is not supported by the kuttl base image.
+        push: ${{ (github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+        tags: ${{ steps.tags.outputs.tags }}

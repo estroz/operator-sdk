@@ -1,3 +1,22 @@
+# Build the manager binary
+FROM --platform=$BUILDPLATFORM golang:1.15 as builder
+ARG TARGETARCH
+
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN go mod download
+
+# Copy the go source
+COPY . .
+
+# Build
+RUN GOOS=linux GOARCH=$TARGETARCH make build/ansible-operator
+
+# Final image.
 FROM registry.access.redhat.com/ubi8/ubi:8.3-227
 
 RUN mkdir -p /etc/ansible \
@@ -42,7 +61,6 @@ RUN TINIARCH=$(case $(arch) in x86_64) echo -n amd64 ;; ppc64le) echo -n ppc64el
 WORKDIR ${HOME}
 USER ${USER_UID}
 
-ARG BIN=bin/ansible-operator
-COPY $BIN /usr/local/bin/ansible-operator
+COPY --from=builder /workspace/build/ansible-operator /usr/local/bin/ansible-operator
 
 ENTRYPOINT ["/tini", "--", "/usr/local/bin/ansible-operator", "run", "--watches-file=./watches.yaml"]
