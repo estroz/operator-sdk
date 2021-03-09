@@ -88,6 +88,11 @@ func (mh *MemcachedHelm) Run() {
 		"#- ../prometheus", "#")
 	pkg.CheckError("enabling prometheus metrics", err)
 
+	err = testutils.UncommentCode(
+		filepath.Join(mh.ctx.Dir, "config", "manifests", "kustomization.yaml"),
+		"#- ../prometheus", "#")
+	pkg.CheckError("enabling prometheus metrics in config/manifests", err)
+
 	log.Infof("adding customized roles")
 	err = testutils.ReplaceInFile(filepath.Join(mh.ctx.Dir, "config", "rbac", "role.yaml"),
 		"#+kubebuilder:scaffold:rules", policyRolesFragment)

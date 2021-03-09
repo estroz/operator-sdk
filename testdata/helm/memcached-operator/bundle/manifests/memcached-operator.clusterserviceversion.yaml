@@ -8,7 +8,7 @@ metadata:
           "apiVersion": "cache.example.com/v1alpha1",
           "kind": "Memcached",
           "metadata": {
-            "name": "memcached-sample"
+            "name": "memcached-operator-memcached-sample"
           },
           "spec": {
             "AntiAffinity": "soft",

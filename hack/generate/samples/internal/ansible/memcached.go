@@ -73,6 +73,11 @@ func (ma *MemcachedAnsible) Run() {
 		"#- ../prometheus", "#")
 	pkg.CheckError("enabling prometheus metrics", err)
 
+	err = testutils.UncommentCode(
+		filepath.Join(ma.ctx.Dir, "config", "manifests", "kustomization.yaml"),
+		"#- ../prometheus", "#")
+	pkg.CheckError("enabling prometheus metrics in config/manifests", err)
+
 	ma.addingAnsibleTask()
 	ma.addingMoleculeMockData()
 

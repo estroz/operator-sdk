@@ -90,7 +90,8 @@ func (mh *MemcachedGoWithWebhooks) Run() {
 	pkg.CheckError("scaffolding webhook", err)
 
 	mh.implementingWebhooks()
-	mh.uncommentKustomizationFile()
+	mh.uncommentDefaultKustomizationFile()
+	mh.uncommentManifestsKustomizationFile()
 
 	log.Infof("creating the bundle")
 	err = mh.ctx.GenerateBundle()
@@ -106,8 +107,8 @@ func (mh *MemcachedGoWithWebhooks) Run() {
 	pkg.CheckError("cleaning up", os.RemoveAll(filepath.Join(mh.ctx.Dir, "bin")))
 }
 
-// uncommentKustomizationFile will uncomment the file kustomization.yaml
-func (mh *MemcachedGoWithWebhooks) uncommentKustomizationFile() {
+// uncommentDefaultKustomizationFile will uncomment the file kustomization.yaml
+func (mh *MemcachedGoWithWebhooks) uncommentDefaultKustomizationFile() {
 	log.Infof("uncomment kustomization.yaml to enable webhook and ca injection")
 	err := testutils.UncommentCode(
 		filepath.Join(mh.ctx.Dir, "config", "default", "kustomization.yaml"),
@@ -162,6 +163,22 @@ func (mh *MemcachedGoWithWebhooks) uncommentKustomizationFile() {
 #    version: v1
 #    name: webhook-service`, "#")
 	pkg.CheckError("uncommented certificate CR", err)
+}
+
+// uncommentManifestsKustomizationFile will uncomment the file kustomization.yaml
+func (mh *MemcachedGoWithWebhooks) uncommentManifestsKustomizationFile() {
+	log.Infof("uncomment config/manifests/kustomization.yaml to enable webhook and ca injection")
+	kustomizationPath := filepath.Join(mh.ctx.Dir, "config", "manifests", "kustomization.yaml")
+	var err error
+
+	err = testutils.UncommentCode(kustomizationPath, "#- ../webhook", "#")
+	pkg.CheckError("uncomment webhook", err)
+
+	err = testutils.UncommentCode(kustomizationPath, "#- ../prometheus", "#")
+	pkg.CheckError("uncomment prometheus", err)
+
+	err = testutils.UncommentCode(kustomizationPath, "#- patches/manager_webhook_patch.yaml", "#")
+	pkg.CheckError("uncomment patches/manager_webhook_patch.yaml", err)
 }
 
 // implementingWebhooks will customize the kind wekbhok file
@@ -327,7 +344,7 @@ const reconcileFragment = `// Fetch the Memcached instance
 			return ctrl.Result{}, err
 		}
 		// Ask to requeue after 1 minute in order to give enough time for the
-		// pods be created on the cluster side and the operand be able 
+		// pods be created on the cluster side and the operand be able
 		// to do the next update step accurately.
 		return ctrl.Result{RequeueAfter: time.Minute }, nil
 	}
