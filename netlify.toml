@@ -17,3 +17,24 @@ hugo
 [build.environment]
   HUGO_ENV = "production"
   HUGO_VERSION = "0.73.0"
+
+# Redirects for latest. This redirects to the latest full repo release, i.e. not scorecard-kuttl.
+[[redirects]]
+  from = "https://sdk.operatorframework.io/dl/latest/:splat"
+  to = "https://sdk.operatorframework.io/dl/v1.5.0/:splat"
+  status = 302
+  force = true
+
+# Redirects for all versions' checksums.
+[[redirects]]
+  from = "https://sdk.operatorframework.io/dl/:version/checksums:suffix"
+  to = "https://github.com/operator-framework/operator-sdk/releases/download/:version/checksums.txt:suffix"
+  status = 302
+  force = true
+
+# Redirects for all versions' binaries.
+[[redirects]]
+  from = "https://sdk.operatorframework.io/dl/:version/:artifact/:os/:arch"
+  to = "https://github.com/operator-framework/operator-sdk/releases/download/:version/:artifact_:os_:arch"
+  status = 302
+  force = true
