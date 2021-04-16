@@ -45,6 +45,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - cache.example.com
+  resources:
+  - runners
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cache.example.com
+  resources:
+  - runners/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cache.example.com
+  resources:
+  - runners/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - ""
   resources:
   - pods

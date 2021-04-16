@@ -15,6 +15,11 @@ spec:
       kind: Memcached
       name: memcacheds.cache.example.com
       version: v1alpha1
+    - description: Runner is the Schema for the runners API
+      displayName: Runner
+      kind: Runner
+      name: runners.cache.example.com
+      version: v1alpha1
   description: Memcached Operator description. TODO.
   displayName: Memcached Operator
   icon:

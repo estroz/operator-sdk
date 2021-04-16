@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	kbtestutils "sigs.k8s.io/kubebuilder/v3/test/e2e/utils"
 
 	"github.com/operator-framework/operator-sdk/hack/generate/samples/internal/pkg"
@@ -42,7 +43,10 @@ func GenerateMemcachedSample(binaryPath, samplesPath string) {
 
 	memcached := Memcached{&ctx}
 	memcached.Prepare()
-	memcached.Run()
+	memcached.Run(
+		schema.GroupVersionKind{Group: "cache", Version: "v1alpha1", Kind: "Memcached"},
+		schema.GroupVersionKind{Group: "cache", Version: "v1alpha1", Kind: "Runner"},
+	)
 }
 
 // Prepare the Context for the Memcached with WebHooks Go Sample
@@ -58,13 +62,16 @@ func (mh *Memcached) Prepare() {
 
 	log.Infof("setting domain and GVK")
 	mh.ctx.Domain = "example.com"
-	mh.ctx.Version = "v1alpha1"
-	mh.ctx.Group = "cache"
-	mh.ctx.Kind = "Memcached"
+
+	// Unset these since multiple GVKs are used.
+	mh.ctx.Version = ""
+	mh.ctx.Group = ""
+	mh.ctx.Kind = ""
 }
 
-// Run the steps to create the Memcached with Webhooks Go Sample
-func (mh *Memcached) Run() {
+// Run implements a project, optionally with APIs defined by gvks.
+func (mh *Memcached) Run(gvks ...schema.GroupVersionKind) {
+
 	log.Infof("creating the project")
 	err := mh.ctx.Init(
 		"--plugins", "go/v3",
@@ -73,32 +80,12 @@ func (mh *Memcached) Run() {
 		"--domain", mh.ctx.Domain)
 	pkg.CheckError("creating the project", err)
 
-	err = mh.ctx.CreateAPI(
-		"--group", mh.ctx.Group,
-		"--version", mh.ctx.Version,
-		"--kind", mh.ctx.Kind,
-		"--controller", "true",
-		"--resource", "true")
-	pkg.CheckError("scaffolding apis", err)
-
-	log.Infof("implementing the API")
-	mh.implementingAPI()
-
-	log.Infof("implementing the Controller")
-	mh.implementingController()
-
-	log.Infof("scaffolding webhook")
-	err = mh.ctx.CreateWebhook(
-		"--group", mh.ctx.Group,
-		"--version", mh.ctx.Version,
-		"--kind", mh.ctx.Kind,
-		"--defaulting",
-		"--defaulting")
-	pkg.CheckError("scaffolding webhook", err)
-
-	mh.implementingWebhooks()
 	mh.uncommentDefaultKustomization()
 	mh.uncommentManifestsKustomization()
+
+	for _, gvk := range gvks {
+		mh.RunCreate(gvk)
+	}
 
 	log.Infof("creating the bundle")
 	err = mh.ctx.GenerateBundle()
@@ -112,6 +99,37 @@ func (mh *Memcached) Run() {
 
 	// Clean up built binaries, if any.
 	pkg.CheckError("cleaning up", os.RemoveAll(filepath.Join(mh.ctx.Dir, "bin")))
+}
+
+// RunCreate the steps to create the Memcached with Webhooks Go Sample
+func (mh *Memcached) RunCreate(gvk schema.GroupVersionKind) {
+	var err error
+
+	err = mh.ctx.CreateAPI(
+		"--group", gvk.Group,
+		"--version", gvk.Version,
+		"--kind", gvk.Kind,
+		"--controller", "true",
+		"--resource", "true")
+	pkg.CheckError("scaffolding apis", err)
+
+	log.Infof("implementing the API")
+	mh.implementingAPI(gvk)
+
+	log.Infof("implementing the Controller")
+	mh.implementingController(gvk)
+
+	log.Infof("scaffolding webhook")
+	err = mh.ctx.CreateWebhook(
+		"--group", gvk.Group,
+		"--version", gvk.Version,
+		"--kind", gvk.Kind,
+		"--defaulting",
+		"--defaulting")
+	pkg.CheckError("scaffolding webhook", err)
+
+	log.Infof("implementing webhooks")
+	mh.implementingWebhooks(gvk)
 }
 
 // uncommentDefaultKustomization will uncomment code in config/default/kustomization.yaml
@@ -192,10 +210,9 @@ func (mh *Memcached) uncommentManifestsKustomization() {
 }
 
 // implementingWebhooks will customize the kind wekbhok file
-func (mh *Memcached) implementingWebhooks() {
-	log.Infof("implementing webhooks")
-	webhookPath := filepath.Join(mh.ctx.Dir, "api", mh.ctx.Version, fmt.Sprintf("%s_webhook.go",
-		strings.ToLower(mh.ctx.Kind)))
+func (mh *Memcached) implementingWebhooks(gvk schema.GroupVersionKind) {
+	webhookPath := filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_webhook.go",
+		strings.ToLower(gvk.Kind)))
 
 	// Add webhook methods
 	err := kbtestutils.InsertCode(webhookPath,
@@ -216,9 +233,9 @@ func (mh *Memcached) implementingWebhooks() {
 }
 
 // implementingController will customize the Controller
-func (mh *Memcached) implementingController() {
+func (mh *Memcached) implementingController(gvk schema.GroupVersionKind) {
 	controllerPath := filepath.Join(mh.ctx.Dir, "controllers", fmt.Sprintf("%s_controller.go",
-		strings.ToLower(mh.ctx.Kind)))
+		strings.ToLower(gvk.Kind)))
 
 	// Add imports
 	err := kbtestutils.InsertCode(controllerPath,
@@ -234,8 +251,8 @@ func (mh *Memcached) implementingController() {
 
 	// Replace reconcile content
 	err = util.ReplaceInFile(controllerPath,
-		fmt.Sprintf("_ = r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(mh.ctx.Kind)),
-		fmt.Sprintf("log := r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(mh.ctx.Kind)))
+		fmt.Sprintf("_ = r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(gvk.Kind)),
+		fmt.Sprintf("log := r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(gvk.Kind)))
 	pkg.CheckError("replacing reconcile content", err)
 
 	// Add reconcile implementation
@@ -250,17 +267,17 @@ func (mh *Memcached) implementingController() {
 
 	// Add watch for the Kind
 	err = util.ReplaceInFile(controllerPath,
-		fmt.Sprintf(watchOriginalFragment, mh.ctx.Group, mh.ctx.Version, mh.ctx.Kind),
-		fmt.Sprintf(watchCustomizedFragment, mh.ctx.Group, mh.ctx.Version, mh.ctx.Kind))
+		fmt.Sprintf(watchOriginalFragment, gvk.Group, gvk.Version, gvk.Kind),
+		fmt.Sprintf(watchCustomizedFragment, gvk.Group, gvk.Version, gvk.Kind))
 	pkg.CheckError("replacing reconcile", err)
 }
 
 // nolint:gosec
 // implementingAPI will customize the API
-func (mh *Memcached) implementingAPI() {
+func (mh *Memcached) implementingAPI(gvk schema.GroupVersionKind) {
 	err := kbtestutils.InsertCode(
-		filepath.Join(mh.ctx.Dir, "api", mh.ctx.Version, fmt.Sprintf("%s_types.go", strings.ToLower(mh.ctx.Kind))),
-		fmt.Sprintf("type %sSpec struct {\n\t// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", mh.ctx.Kind),
+		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", strings.ToLower(gvk.Kind))),
+		fmt.Sprintf("type %sSpec struct {\n\t// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", gvk.Kind),
 		`
 
 	// Size defines the number of Memcached instances
@@ -270,8 +287,8 @@ func (mh *Memcached) implementingAPI() {
 
 	log.Infof("implementing MemcachedStatus")
 	err = kbtestutils.InsertCode(
-		filepath.Join(mh.ctx.Dir, "api", mh.ctx.Version, fmt.Sprintf("%s_types.go", strings.ToLower(mh.ctx.Kind))),
-		fmt.Sprintf("type %sStatus struct {\n\t// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", mh.ctx.Kind),
+		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", strings.ToLower(gvk.Kind))),
+		fmt.Sprintf("type %sStatus struct {\n\t// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", gvk.Kind),
 		`
 
 	// Nodes store the name of the pods which are running Memcached instances
@@ -280,7 +297,7 @@ func (mh *Memcached) implementingAPI() {
 	pkg.CheckError("inserting Node Status", err)
 
 	sampleFile := filepath.Join("config", "samples",
-		fmt.Sprintf("%s_%s_%s.yaml", mh.ctx.Group, mh.ctx.Version, strings.ToLower(mh.ctx.Kind)))
+		fmt.Sprintf("%s_%s_%s.yaml", gvk.Group, gvk.Version, strings.ToLower(gvk.Kind)))
 
 	log.Infof("updating sample to have size attribute")
 	err = util.ReplaceInFile(filepath.Join(mh.ctx.Dir, sampleFile), "foo: bar", "size: 1")

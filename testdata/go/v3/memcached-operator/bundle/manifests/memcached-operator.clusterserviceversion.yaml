@@ -13,6 +13,16 @@ metadata:
           "spec": {
             "size": 1
           }
+        },
+        {
+          "apiVersion": "cache.example.com/v1alpha1",
+          "kind": "Runner",
+          "metadata": {
+            "name": "runner-sample"
+          },
+          "spec": {
+            "size": 1
+          }
         }
       ]
     capabilities: Basic Install
@@ -26,6 +36,11 @@ spec:
       displayName: Memcached
       kind: Memcached
       name: memcacheds.cache.example.com
+      version: v1alpha1
+    - description: Runner is the Schema for the runners API
+      displayName: Runner
+      kind: Runner
+      name: runners.cache.example.com
       version: v1alpha1
   description: Memcached Operator description. TODO.
   displayName: Memcached Operator
@@ -70,6 +85,32 @@ spec:
           - cache.example.com
           resources:
           - memcacheds/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - cache.example.com
+          resources:
+          - runners
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - cache.example.com
+          resources:
+          - runners/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - cache.example.com
+          resources:
+          - runners/status
           verbs:
           - get
           - patch
@@ -247,3 +288,24 @@ spec:
     targetPort: 9443
     type: MutatingAdmissionWebhook
     webhookPath: /mutate-cache-example-com-v1alpha1-memcached
+  - admissionReviewVersions:
+    - v1
+    - v1beta1
+    containerPort: 443
+    deploymentName: memcached-operator-controller-manager
+    failurePolicy: Fail
+    generateName: mrunner.kb.io
+    rules:
+    - apiGroups:
+      - cache.example.com
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - runners
+    sideEffects: None
+    targetPort: 9443
+    type: MutatingAdmissionWebhook
+    webhookPath: /mutate-cache-example-com-v1alpha1-runner

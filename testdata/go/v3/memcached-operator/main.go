@@ -90,6 +90,18 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Memcached")
 		os.Exit(1)
 	}
+	if err = (&controllers.RunnerReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Runner"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Runner")
+		os.Exit(1)
+	}
+	if err = (&cachev1alpha1.Runner{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "Runner")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

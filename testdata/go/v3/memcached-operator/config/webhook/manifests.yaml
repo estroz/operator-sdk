@@ -27,6 +27,27 @@ webhooks:
     resources:
     - memcacheds
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-cache-example-com-v1alpha1-runner
+  failurePolicy: Fail
+  name: mrunner.kb.io
+  rules:
+  - apiGroups:
+    - cache.example.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - runners
+  sideEffects: None
 
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -35,6 +56,27 @@ metadata:
   creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-cache-example-com-v1alpha1-memcached
+  failurePolicy: Fail
+  name: vmemcached.kb.io
+  rules:
+  - apiGroups:
+    - cache.example.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - memcacheds
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   - v1beta1
