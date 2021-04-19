@@ -2,13 +2,16 @@ name: deploy
 
 on:
   push:
+    # Branches that get directly pushed to should be here.
+    # All other branches are gated by PR.
     branches:
-    - '**'
+    - latest
     tags:
     - 'v*'
     - 'scorecard-kuttl/v*'
   pull_request:
-    branches: [ master ]
+    branches:
+    - '**'
 
 jobs:
   check_docs_only:
