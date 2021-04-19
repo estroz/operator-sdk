@@ -248,7 +248,6 @@ spec:
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
-    - v1beta1
     containerPort: 443
     deploymentName: memcached-operator-controller-manager
     failurePolicy: Fail
@@ -267,6 +266,26 @@ spec:
     targetPort: 9443
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-cache-example-com-v1alpha1-memcached
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: memcached-operator-controller-manager
+    failurePolicy: Fail
+    generateName: vrunner.kb.io
+    rules:
+    - apiGroups:
+      - cache.example.com
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - runners
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-cache-example-com-v1alpha1-runner
   - admissionReviewVersions:
     - v1
     - v1beta1

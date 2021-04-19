@@ -58,7 +58,6 @@ metadata:
 webhooks:
 - admissionReviewVersions:
   - v1
-  - v1beta1
   clientConfig:
     service:
       name: webhook-service
@@ -79,14 +78,13 @@ webhooks:
   sideEffects: None
 - admissionReviewVersions:
   - v1
-  - v1beta1
   clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-cache-example-com-v1alpha1-memcached
+      path: /validate-cache-example-com-v1alpha1-runner
   failurePolicy: Fail
-  name: vmemcached.kb.io
+  name: vrunner.kb.io
   rules:
   - apiGroups:
     - cache.example.com
@@ -96,5 +94,5 @@ webhooks:
     - CREATE
     - UPDATE
     resources:
-    - memcacheds
+    - runners
   sideEffects: None

@@ -28,7 +28,7 @@ type RunnerSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Size defines the number of Memcached instances
+	// Size defines the number of Runner instances
 	Size int32 `json:"size,omitempty"`
 
 	// Foo is an example field of Runner. Edit runner_types.go to remove/update
@@ -40,7 +40,7 @@ type RunnerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Nodes store the name of the pods which are running Memcached instances
+	// Nodes store the name of the pods which are running Runner instances
 	Nodes []string `json:"nodes,omitempty"`
 }
 

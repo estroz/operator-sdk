@@ -50,27 +50,27 @@ func (r *Runner) Default() {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-cache-example-com-v1alpha1-memcached,mutating=false,failurePolicy=fail,sideEffects=None,groups=cache.example.com,resources=memcacheds,verbs=create;update,versions=v1alpha1,name=vmemcached.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/validate-cache-example-com-v1alpha1-runner,mutating=false,failurePolicy=fail,sideEffects=None,groups=cache.example.com,resources=runners,verbs=create;update,versions=v1alpha1,name=vrunner.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &Memcached{}
+var _ webhook.Validator = &Runner{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateCreate() error {
-	memcachedlog.Info("validate create", "name", r.Name)
+func (r *Runner) ValidateCreate() error {
+	runnerlog.Info("validate create", "name", r.Name)
 
 	return validateOdd(r.Spec.Size)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateUpdate(old runtime.Object) error {
-	memcachedlog.Info("validate update", "name", r.Name)
+func (r *Runner) ValidateUpdate(old runtime.Object) error {
+	runnerlog.Info("validate update", "name", r.Name)
 
 	return validateOdd(r.Spec.Size)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateDelete() error {
-	memcachedlog.Info("validate delete", "name", r.Name)
+func (r *Runner) ValidateDelete() error {
+	runnerlog.Info("validate delete", "name", r.Name)
 
 	return nil
 }

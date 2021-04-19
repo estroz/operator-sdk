@@ -177,7 +177,7 @@ func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached)
 // labelsForMemcached returns the labels for selecting the resources
 // belonging to the given memcached CR name.
 func labelsForMemcached(name string) map[string]string {
-	return map[string]string{"app": "memcached", "memcached_cr": name}
+	return map[string]string{"app": "memcached", "cr_name": name}
 }
 
 // getPodNames returns the pod names of the array of pods passed in

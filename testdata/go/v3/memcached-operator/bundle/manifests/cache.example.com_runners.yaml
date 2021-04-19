@@ -34,7 +34,7 @@ spec:
                 description: Foo is an example field of Runner. Edit runner_types.go to remove/update
                 type: string
               size:
-                description: Size defines the number of Memcached instances
+                description: Size defines the number of Runner instances
                 format: int32
                 type: integer
             type: object
@@ -42,7 +42,7 @@ spec:
             description: RunnerStatus defines the observed state of Runner
             properties:
               nodes:
-                description: Nodes store the name of the pods which are running Memcached instances
+                description: Nodes store the name of the pods which are running Runner instances
                 items:
                   type: string
                 type: array

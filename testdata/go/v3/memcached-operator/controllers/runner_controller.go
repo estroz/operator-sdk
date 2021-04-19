@@ -60,28 +60,28 @@ type RunnerReconciler struct {
 func (r *RunnerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("runner", req.NamespacedName)
 
-	// Fetch the Memcached instance
-	memcached := &cachev1alpha1.Memcached{}
-	err := r.Get(ctx, req.NamespacedName, memcached)
+	// Fetch the Runner instance
+	runner := &cachev1alpha1.Runner{}
+	err := r.Get(ctx, req.NamespacedName, runner)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			log.Info("Memcached resource not found. Ignoring since object must be deleted")
+			log.Info("Runner resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		log.Error(err, "Failed to get Memcached")
+		log.Error(err, "Failed to get Runner")
 		return ctrl.Result{}, err
 	}
 
 	// Check if the deployment already exists, if not create a new one
 	found := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: runner.Name, Namespace: runner.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		dep := r.deploymentForMemcached(memcached)
+		dep := r.deploymentForRunner(runner)
 		log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 		err = r.Create(ctx, dep)
 		if err != nil {
@@ -96,7 +96,7 @@ func (r *RunnerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Ensure the deployment size is the same as the spec
-	size := memcached.Spec.Size
+	size := runner.Spec.Size
 	if *found.Spec.Replicas != size {
 		found.Spec.Replicas = &size
 		err = r.Update(ctx, found)
@@ -110,25 +110,25 @@ func (r *RunnerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
 
-	// Update the Memcached status with the pod names
-	// List the pods for this memcached's deployment
+	// Update the Runner status with the pod names
+	// List the pods for this runner's deployment
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
-		client.InNamespace(memcached.Namespace),
-		client.MatchingLabels(labelsForMemcached(memcached.Name)),
+		client.InNamespace(runner.Namespace),
+		client.MatchingLabels(labelsForRunner(runner.Name)),
 	}
 	if err = r.List(ctx, podList, listOpts...); err != nil {
-		log.Error(err, "Failed to list pods", "Memcached.Namespace", memcached.Namespace, "Memcached.Name", memcached.Name)
+		log.Error(err, "Failed to list pods", "Runner.Namespace", runner.Namespace, "Runner.Name", runner.Name)
 		return ctrl.Result{}, err
 	}
 	podNames := getPodNames(podList.Items)
 
 	// Update status.Nodes if needed
-	if !reflect.DeepEqual(podNames, memcached.Status.Nodes) {
-		memcached.Status.Nodes = podNames
-		err := r.Status().Update(ctx, memcached)
+	if !reflect.DeepEqual(podNames, runner.Status.Nodes) {
+		runner.Status.Nodes = podNames
+		err := r.Status().Update(ctx, runner)
 		if err != nil {
-			log.Error(err, "Failed to update Memcached status")
+			log.Error(err, "Failed to update Runner status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -136,9 +136,9 @@ func (r *RunnerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-// deploymentForMemcached returns a memcached Deployment object
-func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached) *appsv1.Deployment {
-	ls := labelsForMemcached(m.Name)
+// deploymentForRunner returns a runner Deployment object
+func (r *RunnerReconciler) deploymentForRunner(m *cachev1alpha1.Runner) *appsv1.Deployment {
+	ls := labelsForRunner(m.Name)
 	replicas := m.Spec.Size
 
 	dep := &appsv1.Deployment{
@@ -169,15 +169,15 @@ func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached)
 			},
 		},
 	}
-	// Set Memcached instance as the owner and controller
+	// Set Runner instance as the owner and controller
 	ctrl.SetControllerReference(m, dep, r.Scheme)
 	return dep
 }
 
-// labelsForMemcached returns the labels for selecting the resources
-// belonging to the given memcached CR name.
-func labelsForMemcached(name string) map[string]string {
-	return map[string]string{"app": "memcached", "memcached_cr": name}
+// labelsForRunner returns the labels for selecting the resources
+// belonging to the given runner CR name.
+func labelsForRunner(name string) map[string]string {
+	return map[string]string{"app": "runner", "cr_name": name}
 }
 
 // getPodNames returns the pod names of the array of pods passed in

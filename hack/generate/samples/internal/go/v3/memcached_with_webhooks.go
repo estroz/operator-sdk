@@ -211,13 +211,13 @@ func (mh *Memcached) uncommentManifestsKustomization() {
 
 // implementingWebhooks will customize the kind wekbhok file
 func (mh *Memcached) implementingWebhooks(gvk schema.GroupVersionKind) {
-	webhookPath := filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_webhook.go",
-		strings.ToLower(gvk.Kind)))
+	lowerKind := strings.ToLower(gvk.Kind)
+	webhookPath := filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_webhook.go", lowerKind))
 
 	// Add webhook methods
 	err := kbtestutils.InsertCode(webhookPath,
 		"// TODO(user): fill in your defaulting logic.\n}",
-		webhooksFragment)
+		fmt.Sprintf(webhooksFragment, lowerKind, gvk.Group, gvk.Version, gvk.Kind))
 	pkg.CheckError("replacing webhook validate implementation", err)
 
 	err = util.ReplaceInFile(webhookPath,
@@ -234,8 +234,8 @@ func (mh *Memcached) implementingWebhooks(gvk schema.GroupVersionKind) {
 
 // implementingController will customize the Controller
 func (mh *Memcached) implementingController(gvk schema.GroupVersionKind) {
-	controllerPath := filepath.Join(mh.ctx.Dir, "controllers", fmt.Sprintf("%s_controller.go",
-		strings.ToLower(gvk.Kind)))
+	lowerKind := strings.ToLower(gvk.Kind)
+	controllerPath := filepath.Join(mh.ctx.Dir, "controllers", fmt.Sprintf("%s_controller.go", lowerKind))
 
 	// Add imports
 	err := kbtestutils.InsertCode(controllerPath,
@@ -251,18 +251,20 @@ func (mh *Memcached) implementingController(gvk schema.GroupVersionKind) {
 
 	// Replace reconcile content
 	err = util.ReplaceInFile(controllerPath,
-		fmt.Sprintf("_ = r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(gvk.Kind)),
-		fmt.Sprintf("log := r.Log.WithValues(\"%s\", req.NamespacedName)", strings.ToLower(gvk.Kind)))
+		fmt.Sprintf("_ = r.Log.WithValues(\"%s\", req.NamespacedName)", lowerKind),
+		fmt.Sprintf("log := r.Log.WithValues(\"%s\", req.NamespacedName)", lowerKind))
 	pkg.CheckError("replacing reconcile content", err)
 
 	// Add reconcile implementation
 	err = util.ReplaceInFile(controllerPath,
-		"// your logic here", reconcileFragment)
+		"// your logic here",
+		fmt.Sprintf(reconcileFragment, lowerKind, gvk.Group, gvk.Version, gvk.Kind))
 	pkg.CheckError("replacing reconcile", err)
 
 	// Add helpers funcs to the controller
 	err = kbtestutils.InsertCode(controllerPath,
-		"return ctrl.Result{}, nil\n}", controllerFuncsFragment)
+		"return ctrl.Result{}, nil\n}",
+		fmt.Sprintf(controllerFuncsFragment, lowerKind, gvk.Group, gvk.Version, gvk.Kind))
 	pkg.CheckError("adding helpers methods in the controller", err)
 
 	// Add watch for the Kind
@@ -275,29 +277,35 @@ func (mh *Memcached) implementingController(gvk schema.GroupVersionKind) {
 // nolint:gosec
 // implementingAPI will customize the API
 func (mh *Memcached) implementingAPI(gvk schema.GroupVersionKind) {
-	err := kbtestutils.InsertCode(
-		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", strings.ToLower(gvk.Kind))),
-		fmt.Sprintf("type %sSpec struct {\n\t// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", gvk.Kind),
-		`
+	lowerKind := strings.ToLower(gvk.Kind)
 
-	// Size defines the number of Memcached instances
+	err := kbtestutils.InsertCode(
+		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", lowerKind)),
+		fmt.Sprintf(`type %sSpec struct {
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "make" to regenerate code after modifying this file`, gvk.Kind),
+		fmt.Sprintf(`
+
+	// Size defines the number of %[1]s instances
 	Size int32 `+"`"+`json:"size,omitempty"`+"`"+`
-`)
+`, gvk.Kind))
 	pkg.CheckError("inserting spec Status", err)
 
-	log.Infof("implementing MemcachedStatus")
+	log.Infof("implementing %sStatus", gvk.Kind)
 	err = kbtestutils.InsertCode(
-		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", strings.ToLower(gvk.Kind))),
-		fmt.Sprintf("type %sStatus struct {\n\t// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster\n\t// Important: Run \"make\" to regenerate code after modifying this file", gvk.Kind),
-		`
+		filepath.Join(mh.ctx.Dir, "api", gvk.Version, fmt.Sprintf("%s_types.go", lowerKind)),
+		fmt.Sprintf(`type %sStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file`, gvk.Kind),
+		fmt.Sprintf(`
 
-	// Nodes store the name of the pods which are running Memcached instances
+	// Nodes store the name of the pods which are running %[1]s instances
 	Nodes []string `+"`"+`json:"nodes,omitempty"`+"`"+`
-`)
+`, gvk.Kind))
 	pkg.CheckError("inserting Node Status", err)
 
 	sampleFile := filepath.Join("config", "samples",
-		fmt.Sprintf("%s_%s_%s.yaml", gvk.Group, gvk.Version, strings.ToLower(gvk.Kind)))
+		fmt.Sprintf("%s_%s_%s.yaml", gvk.Group, gvk.Version, lowerKind))
 
 	log.Infof("updating sample to have size attribute")
 	err = util.ReplaceInFile(filepath.Join(mh.ctx.Dir, sampleFile), "foo: bar", "size: 1")
@@ -308,28 +316,28 @@ const rbacFragment = `
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch`
 
-const reconcileFragment = `// Fetch the Memcached instance
-	memcached := &cachev1alpha1.Memcached{}
-	err := r.Get(ctx, req.NamespacedName, memcached)
+const reconcileFragment = `// Fetch the %[4]s instance
+	%[1]s := &%[2]s%[3]s.%[4]s{}
+	err := r.Get(ctx, req.NamespacedName, %[1]s)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			log.Info("Memcached resource not found. Ignoring since object must be deleted")
+			log.Info("%[4]s resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		log.Error(err, "Failed to get Memcached")
+		log.Error(err, "Failed to get %[4]s")
 		return ctrl.Result{}, err
 	}
 
 	// Check if the deployment already exists, if not create a new one
 	found := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: memcached.Name, Namespace: memcached.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: %[1]s.Name, Namespace: %[1]s.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		dep := r.deploymentForMemcached(memcached)
+		dep := r.deploymentFor%[4]s(%[1]s)
 		log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 		err = r.Create(ctx, dep)
 		if err != nil {
@@ -344,7 +352,7 @@ const reconcileFragment = `// Fetch the Memcached instance
 	}
 
 	// Ensure the deployment size is the same as the spec
-	size := memcached.Spec.Size
+	size := %[1]s.Spec.Size
 	if *found.Spec.Replicas != size {
 		found.Spec.Replicas = &size
 		err = r.Update(ctx, found)
@@ -358,25 +366,25 @@ const reconcileFragment = `// Fetch the Memcached instance
 		return ctrl.Result{RequeueAfter: time.Minute }, nil
 	}
 
-	// Update the Memcached status with the pod names
-	// List the pods for this memcached's deployment
+	// Update the %[4]s status with the pod names
+	// List the pods for this %[1]s's deployment
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
-		client.InNamespace(memcached.Namespace),
-		client.MatchingLabels(labelsForMemcached(memcached.Name)),
+		client.InNamespace(%[1]s.Namespace),
+		client.MatchingLabels(labelsFor%[4]s(%[1]s.Name)),
 	}
 	if err = r.List(ctx, podList, listOpts...); err != nil {
-		log.Error(err, "Failed to list pods", "Memcached.Namespace", memcached.Namespace, "Memcached.Name", memcached.Name)
+		log.Error(err, "Failed to list pods", "%[4]s.Namespace", %[1]s.Namespace, "%[4]s.Name", %[1]s.Name)
 		return ctrl.Result{}, err
 	}
 	podNames := getPodNames(podList.Items)
 
 	// Update status.Nodes if needed
-	if !reflect.DeepEqual(podNames, memcached.Status.Nodes) {
-		memcached.Status.Nodes = podNames
-		err := r.Status().Update(ctx, memcached)
+	if !reflect.DeepEqual(podNames, %[1]s.Status.Nodes) {
+		%[1]s.Status.Nodes = podNames
+		err := r.Status().Update(ctx, %[1]s)
 		if err != nil {
-			log.Error(err, "Failed to update Memcached status")
+			log.Error(err, "Failed to update %[4]s status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -384,9 +392,9 @@ const reconcileFragment = `// Fetch the Memcached instance
 
 const controllerFuncsFragment = `
 
-// deploymentForMemcached returns a memcached Deployment object
-func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached) *appsv1.Deployment {
-	ls := labelsForMemcached(m.Name)
+// deploymentFor%[4]s returns a %[1]s Deployment object
+func (r *%[4]sReconciler) deploymentFor%[4]s(m *%[2]s%[3]s.%[4]s) *appsv1.Deployment {
+	ls := labelsFor%[4]s(m.Name)
 	replicas := m.Spec.Size
 
 	dep := &appsv1.Deployment{
@@ -417,15 +425,15 @@ func (r *MemcachedReconciler) deploymentForMemcached(m *cachev1alpha1.Memcached)
 			},
 		},
 	}
-	// Set Memcached instance as the owner and controller
+	// Set %[4]s instance as the owner and controller
 	ctrl.SetControllerReference(m, dep, r.Scheme)
 	return dep
 }
 
-// labelsForMemcached returns the labels for selecting the resources
-// belonging to the given memcached CR name.
-func labelsForMemcached(name string) map[string]string {
-	return map[string]string{"app": "memcached", "memcached_cr": name}
+// labelsFor%[4]s returns the labels for selecting the resources
+// belonging to the given %[1]s CR name.
+func labelsFor%[4]s(name string) map[string]string {
+	return map[string]string{"app": "%[1]s", "cr_name": name}
 }
 
 // getPodNames returns the pod names of the array of pods passed in
@@ -462,32 +470,32 @@ const watchCustomizedFragment = `return ctrl.NewControllerManagedBy(mgr).
 
 const webhooksFragment = `
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-cache-example-com-v1alpha1-memcached,mutating=false,failurePolicy=fail,sideEffects=None,groups=cache.example.com,resources=memcacheds,verbs=create;update,versions=v1alpha1,name=vmemcached.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/validate-%[2]s-example-com-%[3]s-%[1]s,mutating=false,failurePolicy=fail,sideEffects=None,groups=%[2]s.example.com,resources=%[1]ss,verbs=create;update,versions=%[3]s,name=v%[1]s.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &Memcached{}
+var _ webhook.Validator = &%[4]s{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateCreate() error {
-	memcachedlog.Info("validate create", "name", r.Name)
+func (r *%[4]s) ValidateCreate() error {
+	%[1]slog.Info("validate create", "name", r.Name)
 
 	return validateOdd(r.Spec.Size)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateUpdate(old runtime.Object) error {
-	memcachedlog.Info("validate update", "name", r.Name)
+func (r *%[4]s) ValidateUpdate(old runtime.Object) error {
+	%[1]slog.Info("validate update", "name", r.Name)
 
 	return validateOdd(r.Spec.Size)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *Memcached) ValidateDelete() error {
-	memcachedlog.Info("validate delete", "name", r.Name)
+func (r *%[4]s) ValidateDelete() error {
+	%[1]slog.Info("validate delete", "name", r.Name)
 
 	return nil
 }
 func validateOdd(n int32) error {
-	if n%2 == 0 {
+	if n%%2 == 0 {
 		return errors.New("Cluster size must be an odd number")
 	}
 	return nil
