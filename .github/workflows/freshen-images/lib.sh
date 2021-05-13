@@ -52,7 +52,8 @@ function build_ansible_base() {
   local dockerfile=./images/ansible-operator/base.Dockerfile
 
   git checkout refs/tags/$tag
-  local ansible_base_image_tag=$(grep -oP 'FROM \K(quay\.io/estroz/ansible-operator-base:.+)' ./images/ansible-operator/Dockerfile)
+  local ansible_base_image_tag=$(grep -oP 'FROM \K(quay\.io/operator-framework/ansible-operator-base:.+)' ./images/ansible-operator/Dockerfile)
+  ansible_base_image_tag=$(echo $ansible_base_image_tag | sed 's/operator-framework/estroz/')
   # Attempt to get the git ref that built this image from the git_commit image label,
   # falling back to parsing it from the image tag, which typically contains a git ref
   # as the last hyphen-delimit element.
