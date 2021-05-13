@@ -44,6 +44,10 @@ jobs:
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_PASSWORD }}
         registry: quay.io
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
     - name: get build IDs
       id: build_ids
       run: |
