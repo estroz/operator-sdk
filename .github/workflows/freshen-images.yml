@@ -24,8 +24,8 @@ jobs:
     - id: tags
       run: echo ::set-output name=git_tags::$(.github/workflows/freshen-images/tags.sh)
 
-  images:
-    name: images
+  build:
+    name: build
     needs: git_tags
     runs-on: ubuntu-18.04
     environment: deploy
@@ -48,7 +48,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         fetch-depth: 1
-    - name: get build IDs
+    - name: build and push
       id: build_ids
       run: |
         .github/workflows/freshen-images/build.sh --push \
