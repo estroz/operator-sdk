@@ -52,7 +52,7 @@ function build_ansible_base() {
   local dockerfile=./images/ansible-operator/base.Dockerfile
 
   git checkout refs/tags/$tag
-  local ansible_base_image_tag=$(grep -oP 'FROM \K(quay\.io/operator-framework/ansible-operator-base:.+)' ./images/ansible-operator/Dockerfile)
+  local ansible_base_image_tag=$(grep -oP 'FROM \K(quay\.io/estroz/ansible-operator-base:.+)' ./images/ansible-operator/Dockerfile)
   # Attempt to get the git ref that built this image from the git_commit image label,
   # falling back to parsing it from the image tag, which typically contains a git ref
   # as the last hyphen-delimit element.
@@ -74,8 +74,8 @@ function build_generic() {
   local tag=$1
   local id=$2
   local platforms=$3
-  local tag_maj_min="quay.io/operator-framework/${id}:$(echo $tag | grep -Eo "v[1-9]+\.[0-9]+")"
-  local tag_full="quay.io/operator-framework/${id}:${tag}"
+  local tag_maj_min="quay.io/estroz/${id}:$(echo $tag | grep -Eo "v[1-9]+\.[0-9]+")"
+  local tag_full="quay.io/estroz/${id}:${tag}"
   local dockerfile=./images/${id}/Dockerfile
 
   git checkout refs/tags/$tag
